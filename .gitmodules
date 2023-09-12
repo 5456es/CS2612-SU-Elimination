@@ -1,0 +1,12 @@
+[submodule "compcert_lib"]
+	path = compcert_lib
+	url = https://WxWyashen@bitbucket.org/WxWyashen/compcert_lib.git
+[submodule "sets"]
+	path = sets
+	url = https://WxWyashen@bitbucket.org/qinxiang-SJTU/sets.git
+[submodule "VST-A-tool"]
+	path = VST-A-tool
+	url = https://bitbucket.org/qinxiang-SJTU/VST-A-tool.git
+[submodule "compcert-vsta"]
+	path = compcert-vsta
+	url = https://bitbucket.org/WxWyashen/compcert-vsta/
