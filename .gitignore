@@ -18,3 +18,5 @@ CONFIGURE
 .nia.cache
 .nra.cache
 .csdp.cache
+
+.vscode

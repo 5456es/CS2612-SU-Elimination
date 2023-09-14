@@ -1,7 +1,7 @@
 CURRENT_DIR=.
 SETS_DIR = sets
 COMPCERT_DIR = compcert_lib
-PV_DIR = pv
+PL_DIR = pl
 
 COQBIN=
 
@@ -10,13 +10,13 @@ COQBIN=
 COQC=$(COQBIN)coqc
 COQDEP=$(COQBIN)coqdep
 
-PV_FLAG = -R $(PV_DIR) PV -R $(SETS_DIR) SetsClass -R $(COMPCERT_DIR) compcert.lib
+PL_FLAG = -R $(PL_DIR) PL -R $(SETS_DIR) SetsClass -R $(COMPCERT_DIR) compcert.lib
 
 SETS_FLAG = -R $(SETS_DIR) SetsClass
 
 COMPCERT_FLAG = -R $(COMPCERT_DIR) compcert.lib
 
-DEP_FLAG = -R $(PV_DIR) PV -R $(SETS_DIR) SetsClass -R $(COMPCERT_DIR) compcert.lib
+DEP_FLAG = -R $(PL_DIR) PL -R $(SETS_DIR) SetsClass -R $(COMPCERT_DIR) compcert.lib
 
 SETS_FILE_NAMES = \
    SetsClass.v SetsDomain.v SetElement.v SetProd.v RelsDomain.v
@@ -28,12 +28,12 @@ COMPCERT_FILE_NAMES = \
     
 COMPCERT_FILES=$(COMPCERT_FILE_NAMES:%.v=$(COMPCERT_DIR)/%.v)
 
-PV_FILE_NAMES = \
+PL_FILE_NAMES = \
     CoqIntro.v
   
-PV_FILES=$(PV_FILE_NAMES:%.v=$(PV_DIR)/%.v)
+PL_FILES=$(PL_FILE_NAMES:%.v=$(PL_DIR)/%.v)
 
-FILES = $(PV_FILES) \
+FILES = $(PL_FILES) \
   $(SETS_FILES) \
   $(COMPCERT_FILES)
 
@@ -45,9 +45,9 @@ $(COMPCERT_FILES:%.v=%.vo): %.vo: %.v
 	@echo COQC $<
 	@$(COQC) $(COMPCERT_FLAG) $<
 			
-$(PV_FILES:%.v=%.vo): %.vo: %.v
+$(PL_FILES:%.v=%.vo): %.vo: %.v
 	@echo COQC $(<F)
-	@$(COQC) $(PV_FLAG) $<
+	@$(COQC) $(PL_FLAG) $<
 
 all: $(FILES:%.v=%.vo)
 
