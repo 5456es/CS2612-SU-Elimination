@@ -2,6 +2,7 @@ Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.Strings.String.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.micromega.Psatz.
+Require Import Coq.Classes.Morphisms.
 Require Import SetsClass.SetsClass. Import SetsNotation.
 Require Import PL.SyntaxInCoq.
 Local Open Scope string.
@@ -358,6 +359,8 @@ Check forall A (X: A -> Prop), X ∪ ∅ == X.
 
 Check forall A B (X Y: A -> B -> Prop), X ∪ Y ⊆ X.
 
+Module SetsProofDemo.
+
 (** 由于集合以及集合间的运算是基于Coq中的命题进行定义的，集合相关性质的证明也可
     以规约为与命题有关的逻辑证明。例如，我们想要证明，交集运算具有交换律：*)
 
@@ -401,6 +404,8 @@ Proof.
   intros.
   Sets_unfold.
 Admitted. (* 请删除这一行_[Admitted]_并填入你的证明，以_[Qed]_结束。 *)
+
+End SetsProofDemo.
 
 (** SetsClass库中提供了一系列有关集合运算的性质的证明。未来大家在证明中既可以使用
     _[Sets_unfold]_将关于集合运算的命题转化为关于逻辑的命题，也可以直接使用下面这些性
@@ -483,6 +488,7 @@ Qed.
 
 Module DntSem_SimpleWhile4.
 Import Lang_SimpleWhile
+       LangTrans
        DntSem_SimpleWhile2
        DntSem_SimpleWhile3.
 
@@ -584,7 +590,7 @@ Fixpoint eval_com (c: com): state -> state -> Prop :=
 (** 基于上面定义，可以证明一些简单的程序性质。*)
 
 Example inc_x_fact: forall s1 s2 n,
-  eval_com (CAsgn "x" [["x" + 1]]) s1 s2 ->
+  (s1, s2) ∈ eval_com (CAsgn "x" [["x" + 1]]) ->
   s1 "x" = n ->
   s2 "x" = n + 1.
 Proof.
@@ -594,7 +600,8 @@ Proof.
   lia.
 Qed.
 
-(** 更多关于程序行为的有用性质可以使用集合与关系的运算性质完成证明。*)
+(** 更多关于程序行为的有用性质可以使用集合与关系的运算性质完成证明，_[seq_skip]_与
+    _[skip_seq]_表明了删除顺序执行中多余的空语句不改变程序行为。*)
 
 Lemma seq_skip: forall c,
   eval_com (CSeq c CSkip) == eval_com c.
@@ -614,6 +621,9 @@ Proof.
   apply Rels_concat_id_l.
 Qed.
 
+(** 类似的，_[seq_assoc]_表明顺序执行的结合顺序是不影响程序行为的，因此，所有实际的编
+    程中都不需要在程序开发的过程中额外标明顺序执行的结合方式。*)
+
 Lemma seq_assoc: forall c1 c2 c3,
   eval_com (CSeq (CSeq c1 c2) c3) ==
   eval_com (CSeq c1 (CSeq c2 c3)).
@@ -623,6 +633,9 @@ Proof.
   unfold seq_sem.
   apply Rels_concat_assoc.
 Qed.
+
+(** 下面的_[while_sem_congr2]_说的则是：如果对循环体做行为等价变换，那么整个循环的行
+    为也不变。*)
 
 Lemma while_sem_congr2: forall D1 D2 D2',
   D2 == D2' ->
@@ -639,29 +652,91 @@ Proof.
     reflexivity.
 Qed.
 
+(** 以下是证明自动化相关的设定。可以跳过。 *)
+
+Instance seq_sem_congr:
+  Proper (Sets.equiv ==> Sets.equiv ==> Sets.equiv) seq_sem.
+Proof.
+  unfold Proper, respectful; intros.
+  unfold seq_sem; rewrite H, H0.
+  reflexivity.
+Qed.
+
+Instance if_sem_congr: forall D0,
+  Proper (Sets.equiv ==> Sets.equiv ==> Sets.equiv) (if_sem D0).
+Proof.
+  unfold Proper, respectful; intros.
+  unfold if_sem; rewrite H, H0.
+  reflexivity.
+Qed.
+
+Instance while_sem_congr: forall D0,
+  Proper (Sets.equiv ==> Sets.equiv) (while_sem D0).
+Proof.
+  unfold Proper, respectful; intros.
+  apply while_sem_congr2, H.
+Qed.
+
 (** 下面我们证明，我们先前定义的_[remove_skip]_变换保持程序行为不变。*)
 
-Import LangTrans.
-
-Lemma remove_skip_sound: forall c,
+Theorem remove_skip_sound: forall c,
   eval_com (remove_skip c) == eval_com c.
 Proof.
   intros.
   induction c; simpl.
   + reflexivity.
   + reflexivity.
-  + unfold seq_sem.
-    rewrite <- IHc1, <- IHc2.
+  + rewrite <- IHc1, <- IHc2.
     destruct (remove_skip c1), (remove_skip c2);
       simpl; unfold skip_sem, seq_sem;
       rewrite ? Rels_concat_id_l, ? Rels_concat_id_r;
       reflexivity.
-  + unfold if_sem.
-    rewrite IHc1, IHc2.
+  + rewrite IHc1, IHc2.
     reflexivity.
   + apply while_sem_congr2.
     apply IHc.
 Qed.
+
+
+
+(** 前面提到，while循环语句的行为也可以描述为：只要循环条件成立，就先执行循环体再重新执
+    行循环。我们可以证明，我们目前定义的程序语义符合这一性质。*)
+
+Lemma while_sem_unroll1: forall D0 D1,
+  while_sem D0 D1 ==
+  test_true D0 ∘ D1 ∘ while_sem D0 D1 ∪ test_false D0.
+Proof.
+  intros.
+  simpl.
+  unfold while_sem.
+  apply Sets_equiv_Sets_included; split.
+  + apply Sets_indexed_union_included.
+    intros.
+    destruct n as [| n0]; simpl boundedLB.
+    - apply Sets_empty_included.
+    - rewrite <- (Sets_included_indexed_union _ _ n0).
+      reflexivity.
+  + apply Sets_union_included.
+    - rewrite Rels_concat_indexed_union_distr_l.
+      rewrite Rels_concat_indexed_union_distr_l.
+      apply Sets_indexed_union_included; intros.
+      rewrite <- (Sets_included_indexed_union _ _ (S n)).
+      simpl.
+      apply Sets_included_union1.
+    - rewrite <- (Sets_included_indexed_union _ _ (S O)).
+      simpl boundedLB.
+      apply Sets_included_union2.
+Qed.
+
+(** 从这一结论可以看出，_[while_sem D0 D1]_是下面方程的一个解：  
+
+        _[X == test_true D0 ∘ D1 ∘ X ∪ test_false D0]_；   
+
+    数学上，如果一个函数f与某个取值x满足f(x)=x，那么就称x是f的一个不动点。  
+    因此，我们也可以说_[while_sem D0 D1]_是下面函数的一个不动点：*)
+
+
+
 
 End DntSem_SimpleWhile4.
 
