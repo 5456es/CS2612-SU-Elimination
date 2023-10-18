@@ -864,7 +864,6 @@ Class PartialOrder_Setoid
     _[Class]_类型元素的参数。例如，_[`{POA: PartialOrder_Setoid A}]_会指引Coq
     额外填上_[RA: Order A]_和_[EA: Equiv A]_。  
 
-
     序关系两侧做等价变换不改变序关系：*)
 
 Instance PartialOrder_Setoid_Proper
