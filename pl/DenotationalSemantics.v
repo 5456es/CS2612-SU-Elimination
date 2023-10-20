@@ -736,11 +736,7 @@ End DntSem_SimpleWhile4.
 
 (** * Coq中证明并应用Bourbaki-Witt不动点定理 *)
 
-Module DntSem_SimpleWhile5.
-Import Lang_SimpleWhile
-       DntSem_SimpleWhile2
-       DntSem_SimpleWhile3
-       DntSem_SimpleWhile4.
+Module BWFix.
 
 
 (** 下面我们将在Coq中证明Bourbaki-Witt不动点定理。在Bourbaki-Witt不动点定理中，
@@ -895,7 +891,6 @@ Lemma same_omega_ub_same_omega_lub:
   a1 == a2.
 Proof.
   intros A ? ? POA.
-  sets_unfold.
   intros.
   apply antisymmetricity_setoid.
   + apply (is_omega_lub_tight H0).
@@ -1179,6 +1174,12 @@ Qed.
 
 Local Close Scope order_scope.
 
+End BWFix.
+
+Module StateRels_CPO.
+Import BWFix.
+
+
 (** 接下去我们将利用Bourbaki-Witt最小不动点定义While语句的程序语义中运行终止的情
     况。  
 
@@ -1195,25 +1196,25 @@ Instance Equiv_while_fin {A B: Type}: Equiv (A -> B -> Prop) :=
 (** 下面证明这是一个偏序关系。证明的时候需要展开上面两个二元关系（一个表示序关系
     另一个表示等价关系）。以序关系为例，此时需要将_[R_while_fin]_与_[order_rel]_
     全部展开，前者表示将上面的定义展开，后者表示将从_[Class Order]_取出
-    _[order_rel]_域这一操作展开。其余的证明则只需用_[sets_unfold]_证明集合相关的
+    _[order_rel]_域这一操作展开。其余的证明则只需用_[Sets_unfold]_证明集合相关的
     性质。*)
 Instance PO_while_fin {A B: Type}: PartialOrder_Setoid (A -> B -> Prop).
 Proof.
   split.
   + unfold Reflexive_Setoid.
     unfold equiv, order_rel, R_while_fin, Equiv_while_fin; simpl.
-    sets_unfold; intros a b H x y.
+    Sets_unfold; intros a b H x y.
     specialize (H x y).
     tauto.
   + unfold Transitive.
     unfold equiv, order_rel, R_while_fin, Equiv_while_fin; simpl.
-    sets_unfold; intros a b c H H0 x y.
+    Sets_unfold; intros a b c H H0 x y.
     specialize (H x y).
     specialize (H0 x y).
     tauto.
   + unfold AntiSymmetric_Setoid.
     unfold equiv, order_rel, R_while_fin, Equiv_while_fin; simpl.
-    sets_unfold; intros a b H H0 x y.
+    Sets_unfold; intros a b H H0 x y.
     specialize (H x y).
     specialize (H0 x y).
     tauto.
@@ -1234,7 +1235,7 @@ Proof.
   + apply PO_while_fin.
   + unfold increasing, is_omega_lub, is_omega_ub, is_lb.
     unfold omega_lub, order_rel, R_while_fin, oLub_while_fin; simpl.
-    sets_unfold; intros T H.
+    Sets_unfold; intros T H.
     split.
     - intros n x y; intros.
       exists n.
@@ -1245,7 +1246,7 @@ Proof.
       tauto.
   + unfold is_least.
     unfold bot, order_rel, R_while_fin, Bot_while_fin; simpl.
-    sets_unfold; intros a.
+    Sets_unfold; intros a.
     tauto.
 Qed.
 
@@ -1257,7 +1258,104 @@ Proof.
   apply Sets_equiv_equiv.
 Qed.
 
-(** 下面开始证明_[F(X) = (test1(D0) ∘ D ∘ while_denote D0 D) ∪ test0(D0)]_这个函
+(** 有时，Coq证明中需要展开上面这些定理，这可以使用下面的证明指令。*)
+
+Ltac unfold_CPO_defs :=
+  unfold order_rel, equiv, omega_lub, bot,
+         R_while_fin, Equiv_while_fin, oCPO_while_fin, Bot_while_fin.
+
+End StateRels_CPO.
+
+(** 事实上，我们可以在Coq中证明所有的密集上的包含关系都是CPO。以下证明代码可以跳过。*)
+
+Module Sets_CPO.
+Import BWFix.
+
+
+Instance R_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}: Order T :=
+  Sets.included.
+
+Instance Equiv_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}: Equiv T :=
+  Sets.equiv.
+
+Instance PO_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}
+           {_SETS_Properties: SETS_Properties T}: PartialOrder_Setoid T.
+Proof.
+  split.
+  + unfold Reflexive_Setoid.
+    unfold equiv, order_rel, R_sets, Equiv_sets; simpl.
+    intros.
+    rewrite H; reflexivity.
+  + unfold Transitive.
+    unfold equiv, order_rel, R_sets, Equiv_sets; simpl.
+    intros.
+    rewrite H, H0.
+    reflexivity.
+  + unfold AntiSymmetric_Setoid.
+    unfold equiv, order_rel, R_sets, Equiv_sets; simpl.
+    intros.
+    apply Sets_equiv_Sets_included; tauto.
+Qed.
+
+Instance oLub_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}: OmegaLub T :=
+  Sets.indexed_union.
+
+Instance Bot_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}: Bot T :=
+  ∅: T.
+
+Instance oCPO_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}
+           {_SETS_Properties: SETS_Properties T}:
+  OmegaCompletePartialOrder_Setoid T.
+Proof.
+  split.
+  + apply PO_sets.
+  + unfold increasing, is_omega_lub, is_omega_ub, is_lb.
+    unfold omega_lub, order_rel, R_sets, oLub_sets; simpl.
+    intros l _.
+    split.
+    - intros.
+      apply Sets_included_indexed_union.
+    - intros.
+      apply Sets_indexed_union_included.
+      tauto.
+  + unfold is_least.
+    unfold bot, order_rel, R_sets, Bot_sets; simpl.
+    intros.
+    apply Sets_empty_included.
+Qed.
+
+Instance Equiv_equiv_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}
+           {_SETS_Properties: SETS_Properties T}:
+  Equivalence (@equiv T _).
+Proof.
+  apply Sets_equiv_equiv.
+Qed.
+
+Ltac unfold_CPO_defs :=
+  unfold order_rel, equiv, omega_lub, bot,
+         R_sets, Equiv_sets, oLub_sets, Bot_sets.
+
+End Sets_CPO.
+
+Module StateRels_Funcs.
+Import BWFix StateRels_CPO.
+
+
+(** 下面开始证明_[F(X) = (test_true(D0) ∘ D ∘ X) ∪ test_false(D0)]_这个函
     数的单调性与连续性。整体证明思路是：(1) _[F(X) = X]_是单调连续的；(2) 如果
     _[F]_是单调连续的，那么_[G(X) = Y ∘ F(X)]_也是单调连续的；(3) 如果_[F]_是单
     调连续的，那么_[G(X) = F(X) ∪ Y]_也是单调连续的；其中_[Y]_是给定的二元关系。  
@@ -1317,7 +1415,7 @@ Proof.
   intros.
   unfold mono.
   unfold order_rel, R_while_fin.
-  sets_unfold.
+  Sets_unfold.
   intros R R' H st1 st2.
   specialize (H st1 st2).
   tauto.
@@ -1331,7 +1429,7 @@ Proof.
   unfold continuous.
   unfold increasing, omega_lub, order_rel, equiv,
          oLub_while_fin, R_while_fin, Equiv_while_fin.
-  sets_unfold.
+  Sets_unfold.
   intros l H st1 st2.
   split; intros.
   + destruct H0 as [ [ n ? ] | ?].
@@ -1359,6 +1457,16 @@ Proof.
   + exact (compose_mono f _ H H1).
   + exact (compose_continuous f _ H H1 H0 H2).
 Qed.
+
+End StateRels_Funcs.
+
+Module DntSem_SimpleWhile5.
+Import Lang_SimpleWhile
+       DntSem_SimpleWhile2
+       DntSem_SimpleWhile3
+       DntSem_SimpleWhile4
+       BWFix StateRels_CPO StateRels_Funcs.
+
 
 (** 最终我们可以用Bourbaki-Witt不动点定义while语句运行终止的情况。  
 
@@ -1397,3 +1505,6 @@ Qed.
 
 
 End DntSem_SimpleWhile5.
+
+
+
