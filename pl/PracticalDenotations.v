@@ -16,7 +16,10 @@ Module DntSem_SimpleWhile6.
 Import Lang_SimpleWhile.
 
 
-(** 程序状态的修改：*)
+(** 程序状态的修改：  
+
+    Coq定义：*)
+
 Definition state: Type := var_name -> int64.
 
 (** 这里_[int64]_是CompCert库中定义的64位整数，该定义是_[compcert.lib.Integers]_
@@ -306,7 +309,12 @@ End DntSem_SimpleWhile8.
 
 (** * 将运算越界定义为表达式求值错误 - 用二元关系 *)
 
-(** 下面定义64位整数之间在有符号64位整数范围内的运算关系。*)
+(** 上面我们讨论了将表达式语义定义为程序状态到_[option int64]_的函数这一方案。下
+    面我们探讨另一种描述程序运行出错或未定义行为的方案，即将表达式的语义定义为程
+    序状态与_[int64]_之间的二元关系。  
+
+
+    下面定义64位整数之间在有符号64位整数范围内的运算关系。*)
 
 Definition arith_compute1_nrm
              (Zfun: Z -> Z -> Z)
