@@ -29,7 +29,7 @@ COMPCERT_FILE_NAMES = \
 COMPCERT_FILES=$(COMPCERT_FILE_NAMES:%.v=$(COMPCERT_DIR)/%.v)
 
 PL_FILE_NAMES = \
-    CoqIntro.v InductiveType.v Logic.v SyntaxInCoq.v DenotationalSemantics.v
+    CoqIntro.v InductiveType.v Logic.v SyntaxInCoq.v DenotationalSemantics.v PracticalDenotations.v
   
 PL_FILES=$(PL_FILE_NAMES:%.v=$(PL_DIR)/%.v)
 
