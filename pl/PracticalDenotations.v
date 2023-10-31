@@ -1008,6 +1008,14 @@ Class LubProperty (A: Type) {RA: Order A} {LubA: Lub A}: Prop :=
 Class GlbProperty (A: Type) {RA: Order A} {GlbA: Glb A}: Prop :=
   glb_is_glb: forall X: A -> Prop, is_glb X (glb X).
 
+Lemma lub_sound: forall {A: Type} `{LubPA: LubProperty A},
+  forall X: A -> Prop, is_ub X (lub X).
+Proof. intros. destruct (lub_is_lub X). tauto. Qed.
+
+Lemma lub_tight: forall {A: Type} `{LubPA: LubProperty A},
+  forall X: A -> Prop, is_lb (is_ub X) (lub X).
+Proof. intros. destruct (lub_is_lub X). tauto. Qed.
+
 Lemma glb_sound: forall {A: Type} `{GlbPA: GlbProperty A},
   forall X: A -> Prop, is_lb X (glb X).
 Proof. intros. destruct (glb_is_glb X). tauto. Qed.
@@ -1084,9 +1092,196 @@ Proof.
   apply H0.
 Qed.
 
+(** 在完备格中大与小这两个方向是对称的，所以我们也可以定义Knaster-Tarski最大
+    不动点，并证明相关性质。*)
+
+(************)
+(** 习题：  *)
+(************)
+
+
+Definition KT_GFix
+             {A: Type}
+             `{CLA: CompleteLattice_Setoid A}
+             (f: A -> A): A :=
+  lub (fun a => a <= f a).
+
+Lemma KT_GFix_is_post_fix:
+  forall
+    {A: Type}
+    `{CLA: CompleteLattice_Setoid A}
+    {EquivA: Equivalence equiv}
+    (f: A -> A),
+    mono f ->
+    KT_GFix f <= f (KT_GFix f).
+(* 请在此处填入你的证明，以_[Qed]_结束。 *)
+Proof.
+  intros.
+  unfold KT_GFix.
+  apply lub_tight; unfold is_ub; intros.
+  transitivity (f a'); [apply H0 |].
+  apply H.
+  apply lub_sound.
+  apply H0.
+Qed.
+
+Lemma KT_GFix_is_fix:
+  forall
+    {A: Type}
+    `{CLA: CompleteLattice_Setoid A}
+    {EquivA: Equivalence equiv}
+    (f: A -> A),
+    mono f ->
+    f (KT_GFix f) == KT_GFix f.
+(* 请在此处填入你的证明，以_[Qed]_结束。 *)
+Proof.
+  intros.
+  pose proof KT_GFix_is_post_fix f H.
+  apply antisymmetricity_setoid.
+  + apply lub_sound.
+    apply H, H0.
+  + apply H0.
+Qed.
+
+Lemma KT_GFix_is_greatest_fix:
+  forall
+    {A: Type}
+    `{CLA: CompleteLattice_Setoid A}
+    {EquivA: Equivalence equiv}
+    (f: A -> A)
+    (a: A),
+    mono f ->
+    f a == a ->
+    a <= KT_GFix f.
+(* 请在此处填入你的证明，以_[Qed]_结束。 *)
+Proof.
+  intros.
+  apply lub_sound.
+  apply reflexivity_setoid.
+  symmetry.
+  apply H0.
+Qed.
+
 Local Close Scope order_scope.
 
 End KTFix.
+
+(** 事实上，我们可以在Coq中证明所有的幂集上的包含关系都是完备格。以下证明代码可以跳过。*)
+
+Module Sets_CL.
+Import BWFix KTFix Sets_CPO.
+
+
+Local Open Scope sets_scope.
+Local Open Scope order_scope.
+
+Instance Lub_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}: Lub T :=
+  Sets.general_union.
+
+Instance Glb_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}: Glb T :=
+  Sets.general_intersect.
+
+Instance LubP_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}
+           {_SETS_Properties: SETS_Properties T}: LubProperty T.
+Proof.
+  split.
+  + unfold lub, Lub_sets, is_ub.
+    intros.
+    apply Sets_included_general_union.
+    tauto.
+  + unfold lub, Lub_sets, is_lb, is_ub.
+    intros.
+    apply Sets_general_union_included.
+    intros.
+    apply H.
+    tauto.
+Qed.
+
+Instance GlbP_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}
+           {_SETS_Properties: SETS_Properties T}: GlbProperty T.
+Proof.
+  split.
+  + unfold glb, Glb_sets, is_lb.
+    intros.
+    apply Sets_general_intersect_included.
+    tauto.
+  + unfold glb, Glb_sets, is_lb, is_ub.
+    intros.
+    apply Sets_included_general_intersect.
+    intros.
+    apply H.
+    tauto.
+Qed.
+
+Instance CL_sets
+           {T: Type}
+           {_SETS: Sets.SETS T}
+           {_SETS_Properties: SETS_Properties T}: CompleteLattice_Setoid T.
+Proof.
+  split.
+  + apply PO_sets.
+  + apply LubP_sets.
+  + apply GlbP_sets.
+Qed.
+
+Local Close Scope sets_scope.
+Local Close Scope order_scope.
+
+End Sets_CL.
+
+
+(** * 用Knaster-Tarski不动点改写While语言的语义 *)
+
+Module DntSem_While2.
+Import Lang_While
+       DntSem_While1 EDenote CDenote
+       BWFix KTFix Sets_CPO Sets_CL.
+
+
+Definition while_sem
+             (D0: EDenote)
+             (D1: CDenote): CDenote :=
+  {|
+    nrm := BW_LFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_false D0);
+    err := BW_LFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_true D0 ∘ D1.(err) ∪ D0.(err));
+    inf := KT_GFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_true D0 ∘ D1.(inf));
+  |}.
+
+(** 程序语句的语义可以最后表示成下面递归函数。*)
+
+Fixpoint eval_com (c: com): CDenote :=
+  match c with
+  | CSkip =>
+      skip_sem
+  | CAsgn X e =>
+      asgn_sem X (eval_expr e)
+  | CSeq c1 c2 =>
+      seq_sem (eval_com c1) (eval_com c2)
+  | CIf e c1 c2 =>
+      if_sem (eval_expr e) (eval_com c1) (eval_com c2)
+  | CWhile e c1 =>
+      while_sem (eval_expr e) (eval_com c1)
+  end.
+
+
+End DntSem_While2.
 
 (** * WhileDeref语言的语义 *)
 
