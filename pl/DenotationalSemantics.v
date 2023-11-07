@@ -1266,7 +1266,7 @@ Ltac unfold_CPO_defs :=
 
 End StateRels_CPO.
 
-(** 事实上，我们可以在Coq中证明所有的密集上的包含关系都是CPO。以下证明代码可以跳过。*)
+(** 事实上，我们可以在Coq中证明所有的幂集上的包含关系都是CPO。以下证明代码可以跳过。*)
 
 Module Sets_CPO.
 Import BWFix.
@@ -1344,6 +1344,11 @@ Instance Equiv_equiv_sets
 Proof.
   apply Sets_equiv_equiv.
 Qed.
+
+Arguments R_sets: simpl never.
+Arguments Equiv_sets: simpl never.
+Arguments oLub_sets: simpl never.
+Arguments Bot_sets: simpl never.
 
 Ltac unfold_CPO_defs :=
   unfold order_rel, equiv, omega_lub, bot,

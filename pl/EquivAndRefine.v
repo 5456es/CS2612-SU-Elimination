@@ -9,7 +9,8 @@ Require Import Coq.Logic.Classical_Prop.
 Require Import SetsClass.SetsClass. Import SetsNotation.
 Require Import compcert.lib.Integers.
 Require Import PL.SyntaxInCoq.
-Require Import PL.PracticalDenotations.
+Require Import PL.DenotationalSemantics. Import BWFix Sets_CPO.
+Require Import PL.PracticalDenotations. Import KTFix Sets_CL.
 Import Lang_While DntSem_While1 DntSem_While2.
 Import EDenote CDenote.
 Local Open Scope string.
@@ -474,4 +475,1096 @@ Proof.
 Qed.
 
 
+
+(** 两条重要性质之二是：所有语法连接词能保持语义等价关系（congruence），也能保持
+    精化关系（monotonicity）。下面先证明加法、减法、乘法的情况。*)
+
+Lemma arith_sem1_nrm_congr: forall Zfun (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  arith_sem1_nrm Zfun ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  arith_sem1_nrm Zfun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? ? s i.
+  unfold arith_sem1_nrm.
+  apply ex_iff_morphism; intros i1.
+  apply ex_iff_morphism; intros i2.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma arith_sem1_err_congr: forall Zfun (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  ⟦ e11 ⟧.(err) ∪ ⟦ e21 ⟧.(err) ∪
+  arith_sem1_err Zfun ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  ⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err) ∪
+  arith_sem1_err Zfun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? ? s.
+  unfold arith_sem1_err.
+  apply or_iff_morphism.
+  + apply or_iff_morphism.
+    - apply H.(err_eequiv).
+    - apply H0.(err_eequiv).
+  + apply ex_iff_morphism; intros i1.
+    apply ex_iff_morphism; intros i2.
+    apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+    apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+    reflexivity.
+Qed.
+
+Lemma arith_sem1_nrm_mono: forall Zfun (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  arith_sem1_nrm Zfun ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  arith_sem1_nrm Zfun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm) ∪
+  ((⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err) ∪
+    arith_sem1_err Zfun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm)) × int64).
+Proof.
+  intros.
+  sets_unfold.
+  intros s i.
+  unfold arith_sem1_nrm, arith_sem1_err.
+  intros [i1 [i2 [? [? ?] ] ] ].
+  apply H.(nrm_erefine) in H1.
+  apply H0.(nrm_erefine) in H2.
+  sets_unfold in H1.
+  sets_unfold in H2.
+  destruct H1; [| tauto].
+  destruct H2; [| tauto].
+  left.
+  exists i1, i2.
+  tauto.
+Qed.
+
+Lemma arith_sem1_err_mono: forall Zfun (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  ⟦ e11 ⟧.(err) ∪ ⟦ e21 ⟧.(err) ∪
+  arith_sem1_err Zfun ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  ⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err) ∪
+  arith_sem1_err Zfun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  intros.
+  sets_unfold.
+  intros s.
+  unfold arith_sem1_err.
+  intros [ [? | ?] | [i1 [i2 [? [? ?] ] ] ] ].
+  + apply H.(err_erefine) in H1.
+    tauto.
+  + apply H0.(err_erefine) in H1.
+    tauto.
+  + apply H.(nrm_erefine) in H1.
+    apply H0.(nrm_erefine) in H2.
+    sets_unfold in H1.
+    sets_unfold in H2.
+    destruct H1; [| tauto].
+    destruct H2; [| tauto].
+    right.
+    exists i1, i2.
+    tauto.
+Qed.
+
+(** 很多其它情况的证明是类似的。*)
+
+Lemma arith_sem2_nrm_congr: forall int64fun (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  arith_sem2_nrm int64fun ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  arith_sem2_nrm int64fun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? ? s i.
+  unfold arith_sem2_nrm.
+  apply ex_iff_morphism; intros i1.
+  apply ex_iff_morphism; intros i2.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma arith_sem2_err_congr: forall (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  ⟦ e11 ⟧.(err) ∪ ⟦ e21 ⟧.(err) ∪
+  arith_sem2_err ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  ⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err) ∪
+  arith_sem2_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? s.
+  unfold arith_sem2_err.
+  apply or_iff_morphism.
+  + apply or_iff_morphism.
+    - apply H.(err_eequiv).
+    - apply H0.(err_eequiv).
+  + apply ex_iff_morphism; intros i1.
+    apply ex_iff_morphism; intros i2.
+    apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+    apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+    reflexivity.
+Qed.
+
+Lemma arith_sem2_nrm_mono: forall int64fun (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  arith_sem2_nrm int64fun ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  arith_sem2_nrm int64fun ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm) ∪
+  ((⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err) ∪
+    arith_sem2_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm)) × int64).
+Proof.
+  intros.
+  sets_unfold.
+  intros s i.
+  unfold arith_sem2_nrm, arith_sem2_err.
+  intros [i1 [i2 [? [? ?] ] ] ].
+  apply H.(nrm_erefine) in H1.
+  apply H0.(nrm_erefine) in H2.
+  sets_unfold in H1.
+  sets_unfold in H2.
+  destruct H1; [| tauto].
+  destruct H2; [| tauto].
+  left.
+  exists i1, i2.
+  tauto.
+Qed.
+
+Lemma arith_sem2_err_mono: forall (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  ⟦ e11 ⟧.(err) ∪ ⟦ e21 ⟧.(err) ∪
+  arith_sem2_err ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  ⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err) ∪
+  arith_sem2_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  intros.
+  sets_unfold.
+  intros s.
+  unfold arith_sem2_err.
+  intros [ [? | ?] | [i1 [i2 [? [? ?] ] ] ] ].
+  + apply H.(err_erefine) in H1.
+    tauto.
+  + apply H0.(err_erefine) in H1.
+    tauto.
+  + apply H.(nrm_erefine) in H1.
+    apply H0.(nrm_erefine) in H2.
+    sets_unfold in H1.
+    sets_unfold in H2.
+    destruct H1; [| tauto].
+    destruct H2; [| tauto].
+    right.
+    exists i1, i2.
+    tauto.
+Qed.
+
+Lemma cmp_sem_nrm_congr: forall op (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  cmp_sem_nrm op ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  cmp_sem_nrm op ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? ? s i.
+  unfold cmp_sem_nrm.
+  apply ex_iff_morphism; intros i1.
+  apply ex_iff_morphism; intros i2.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma cmp_sem_err_congr: forall (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  ⟦ e11 ⟧.(err) ∪ ⟦ e21 ⟧.(err) ==
+  ⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? s.
+  apply or_iff_morphism.
+  + apply H.(err_eequiv).
+  + apply H0.(err_eequiv).
+Qed.
+
+Lemma cmp_sem_nrm_mono: forall op (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  cmp_sem_nrm op ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  cmp_sem_nrm op ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm) ∪
+  ((⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err)) × int64).
+Proof.
+  intros.
+  sets_unfold.
+  intros s i.
+  unfold cmp_sem_nrm.
+  intros [i1 [i2 [? [? ?] ] ] ].
+  apply H.(nrm_erefine) in H1.
+  apply H0.(nrm_erefine) in H2.
+  sets_unfold in H1.
+  sets_unfold in H2.
+  destruct H1; [| tauto].
+  destruct H2; [| tauto].
+  left.
+  exists i1, i2.
+  tauto.
+Qed.
+
+Lemma cmp_sem_err_mono: forall (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  ⟦ e11 ⟧.(err) ∪ ⟦ e21 ⟧.(err) ⊆
+  ⟦ e12 ⟧.(err) ∪ ⟦ e22 ⟧.(err).
+Proof.
+  intros.
+  sets_unfold.
+  intros s.
+  intros [? | ?].
+  + apply H.(err_erefine) in H1.
+    tauto.
+  + apply H0.(err_erefine) in H1.
+    tauto.
+Qed.
+
+Lemma and_sem_nrm_congr: forall (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  and_sem_nrm ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  and_sem_nrm ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? s i.
+  unfold and_sem_nrm.
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply or_iff_morphism; [reflexivity |].
+  apply and_iff_morphism; [reflexivity |].
+  apply ex_iff_morphism; intros i2.
+  apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma and_sem_err_congr: forall (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  ⟦ e11 ⟧.(err) ∪ and_sem_err ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(err) ==
+  ⟦ e12 ⟧.(err) ∪ and_sem_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(err).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? s.
+  unfold and_sem_err.
+  apply or_iff_morphism; [apply H.(err_eequiv) |].
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply and_iff_morphism; [| apply H0.(err_eequiv)].
+  reflexivity.
+Qed.
+
+Lemma and_sem_nrm_mono: forall (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  and_sem_nrm ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  and_sem_nrm ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm) ∪
+  ((⟦ e12 ⟧.(err) ∪ and_sem_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(err)) × int64).
+Proof.
+  intros.
+  sets_unfold.
+  intros s i.
+  unfold and_sem_nrm, and_sem_err.
+  intros [i1 ?].
+  destruct H1.
+  apply H.(nrm_erefine) in H1.
+  sets_unfold in H1.
+  destruct H1; [| tauto].
+  destruct H2; [left; exists i1; tauto |].
+  destruct H2 as [? [i2 [? ?] ] ].
+  apply H0.(nrm_erefine) in H3.
+  sets_unfold in H3.
+  destruct H3; [| right; right; exists i1; tauto].
+  left; exists i1.
+  split; [tauto |].
+  right.
+  split; [tauto |].
+  exists i2; tauto.
+Qed.
+
+Lemma and_sem_err_mono: forall (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  ⟦ e11 ⟧.(err) ∪ and_sem_err ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(err) ⊆
+  ⟦ e12 ⟧.(err) ∪ and_sem_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(err).
+Proof.
+  intros.
+  sets_unfold.
+  intros s.
+  unfold and_sem_err.
+  intros [? | ?]; [left; apply H.(err_erefine); tauto |].
+  destruct H1 as [i1 [? [? ?] ] ].
+  apply H.(nrm_erefine) in H1.
+  sets_unfold in H1.
+  destruct H1; [| tauto].
+  right; exists i1.
+  apply H0.(err_erefine) in H3.
+  tauto.
+Qed.
+
+Lemma or_sem_nrm_congr: forall (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  or_sem_nrm ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ==
+  or_sem_nrm ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? s i.
+  unfold or_sem_nrm.
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply or_iff_morphism; [reflexivity |].
+  apply and_iff_morphism; [reflexivity |].
+  apply ex_iff_morphism; intros i2.
+  apply and_iff_morphism; [apply H0.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma or_sem_err_congr: forall (e11 e12 e21 e22: expr),
+  e11 ~=~ e12 ->
+  e21 ~=~ e22 ->
+  ⟦ e11 ⟧.(err) ∪ or_sem_err ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(err) ==
+  ⟦ e12 ⟧.(err) ∪ or_sem_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(err).
+Proof.
+  sets_unfold.
+  intros ? ? ? ? ? ? s.
+  unfold or_sem_err.
+  apply or_iff_morphism; [apply H.(err_eequiv) |].
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  apply and_iff_morphism; [| apply H0.(err_eequiv)].
+  reflexivity.
+Qed.
+
+Lemma or_sem_nrm_mono: forall (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  or_sem_nrm ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(nrm) ⊆
+  or_sem_nrm ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(nrm) ∪
+  ((⟦ e12 ⟧.(err) ∪ or_sem_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(err)) × int64).
+Proof.
+  intros.
+  sets_unfold.
+  intros s i.
+  unfold or_sem_nrm, or_sem_err.
+  intros [i1 ?].
+  destruct H1.
+  apply H.(nrm_erefine) in H1.
+  sets_unfold in H1.
+  destruct H1; [| tauto].
+  destruct H2; [left; exists i1; tauto |].
+  destruct H2 as [? [i2 [? ?] ] ].
+  apply H0.(nrm_erefine) in H3.
+  sets_unfold in H3.
+  destruct H3; [| right; right; exists i1; tauto].
+  left; exists i1.
+  split; [tauto |].
+  right.
+  split; [tauto |].
+  exists i2; tauto.
+Qed.
+
+Lemma or_sem_err_mono: forall (e11 e12 e21 e22: expr),
+  e11 <<= e12 ->
+  e21 <<= e22 ->
+  ⟦ e11 ⟧.(err) ∪ or_sem_err ⟦ e11 ⟧.(nrm) ⟦ e21 ⟧.(err) ⊆
+  ⟦ e12 ⟧.(err) ∪ or_sem_err ⟦ e12 ⟧.(nrm) ⟦ e22 ⟧.(err).
+Proof.
+  intros.
+  sets_unfold.
+  intros s.
+  unfold or_sem_err.
+  intros [? | ?]; [left; apply H.(err_erefine); tauto |].
+  destruct H1 as [i1 [? [? ?] ] ].
+  apply H.(nrm_erefine) in H1.
+  sets_unfold in H1.
+  destruct H1; [| tauto].
+  right; exists i1.
+  apply H0.(err_erefine) in H3.
+  tauto.
+Qed.
+
+(** 下面把二元运算的情况汇总起来。*)
+
+Instance EBinop_congr: forall op,
+  Proper (eequiv ==> eequiv ==> eequiv) (EBinop op).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  destruct op.
+  (** 布尔二元运算的情况 *)
+  + split.
+    - apply or_sem_nrm_congr; tauto.
+    - apply or_sem_err_congr; tauto.
+  + split.
+    - apply and_sem_nrm_congr; tauto.
+    - apply and_sem_err_congr; tauto.
+  (** 大小比较的情况 *)
+  + split.
+    - apply cmp_sem_nrm_congr; tauto.
+    - apply cmp_sem_err_congr; tauto.
+  + split.
+    - apply cmp_sem_nrm_congr; tauto.
+    - apply cmp_sem_err_congr; tauto.
+  + split.
+    - apply cmp_sem_nrm_congr; tauto.
+    - apply cmp_sem_err_congr; tauto.
+  + split.
+    - apply cmp_sem_nrm_congr; tauto.
+    - apply cmp_sem_err_congr; tauto.
+  + split.
+    - apply cmp_sem_nrm_congr; tauto.
+    - apply cmp_sem_err_congr; tauto.
+  + split.
+    - apply cmp_sem_nrm_congr; tauto.
+    - apply cmp_sem_err_congr; tauto.
+  (** 加减乘运算的情况 *)
+  + split.
+    - apply arith_sem1_nrm_congr; tauto.
+    - apply arith_sem1_err_congr; tauto.
+  + split.
+    - apply arith_sem1_nrm_congr; tauto.
+    - apply arith_sem1_err_congr; tauto.
+  + split.
+    - apply arith_sem1_nrm_congr; tauto.
+    - apply arith_sem1_err_congr; tauto.
+  (** 除法与取余的情况 *)
+  + split.
+    - apply arith_sem2_nrm_congr; tauto.
+    - apply arith_sem2_err_congr; tauto.
+  + split.
+    - apply arith_sem2_nrm_congr; tauto.
+    - apply arith_sem2_err_congr; tauto.
+Qed.
+
+Instance EBinop_mono: forall op,
+  Proper (erefine ==> erefine ==> erefine) (EBinop op).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  destruct op.
+  (** 布尔二元运算的情况 *)
+  + split.
+    - simpl.
+    Locate "×".
+    Set Printing All.
+
+      apply (or_sem_nrm_mono x y x0 y0); tauto.
+    - apply or_sem_err_mono; tauto.
+  + split.
+    - apply and_sem_nrm_mono; tauto.
+    - apply and_sem_err_mono; tauto.
+  (** 大小比较的情况 *)
+  + split.
+    - apply cmp_sem_nrm_mono; tauto.
+    - apply cmp_sem_err_mono; tauto.
+  + split.
+    - apply cmp_sem_nrm_mono; tauto.
+    - apply cmp_sem_err_mono; tauto.
+  + split.
+    - apply cmp_sem_nrm_mono; tauto.
+    - apply cmp_sem_err_mono; tauto.
+  + split.
+    - apply cmp_sem_nrm_mono; tauto.
+    - apply cmp_sem_err_mono; tauto.
+  + split.
+    - apply cmp_sem_nrm_mono; tauto.
+    - apply cmp_sem_err_mono; tauto.
+  + split.
+    - apply cmp_sem_nrm_mono; tauto.
+    - apply cmp_sem_err_mono; tauto.
+  (** 加减乘运算的情况 *)
+  + split.
+    - apply arith_sem1_nrm_mono; tauto.
+    - apply arith_sem1_err_mono; tauto.
+  + split.
+    - apply arith_sem1_nrm_mono; tauto.
+    - apply arith_sem1_err_mono; tauto.
+  + split.
+    - apply arith_sem1_nrm_mono; tauto.
+    - apply arith_sem1_err_mono; tauto.
+  (** 除法与取余的情况 *)
+  + split.
+    - apply arith_sem2_nrm_mono; tauto.
+    - apply arith_sem2_err_mono; tauto.
+  + split.
+    - apply arith_sem2_nrm_mono; tauto.
+    - apply arith_sem2_err_mono; tauto.
+Qed.
+
+(** 一元运算的情况是类似的。*)
+
+Lemma not_sem_nrm_congr: forall (e1 e2: expr),
+  e1 ~=~ e2 ->
+  not_sem_nrm ⟦ e1 ⟧.(nrm) ==
+  not_sem_nrm ⟦ e2 ⟧.(nrm).
+Proof.
+  unfold not_sem_nrm.
+  sets_unfold.
+  intros ? ? ? s i.
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma not_sem_err_congr: forall (e1 e2: expr),
+  e1 ~=~ e2 ->
+  ⟦ e1 ⟧.(err) == ⟦ e2 ⟧.(err).
+Proof.
+  intros.
+  apply H.(err_eequiv).
+Qed.
+
+Lemma not_sem_nrm_mono: forall (e1 e2: expr),
+  e1 <<= e2 ->
+  not_sem_nrm ⟦ e1 ⟧.(nrm) ⊆
+  not_sem_nrm ⟦ e2 ⟧.(nrm) ∪ (⟦ e2 ⟧.(err) × int64).
+Proof.
+  unfold not_sem_nrm.
+  sets_unfold.
+  intros ? ? ? s i.
+  intros [i1 [? ?] ].
+  apply H.(nrm_erefine) in H0.
+  sets_unfold in H0.
+  destruct H0; [| tauto].
+  left; exists i1.
+  tauto.
+Qed.
+
+Lemma not_sem_err_mono: forall (e1 e2: expr),
+  e1 <<= e2 ->
+  ⟦ e1 ⟧.(err) ⊆ ⟦ e2 ⟧.(err).
+Proof.
+  intros.
+  apply H.(err_erefine).
+Qed.
+
+Lemma neg_sem_nrm_congr: forall (e1 e2: expr),
+  e1 ~=~ e2 ->
+  neg_sem_nrm ⟦ e1 ⟧.(nrm) ==
+  neg_sem_nrm ⟦ e2 ⟧.(nrm).
+Proof.
+  unfold neg_sem_nrm.
+  sets_unfold.
+  intros ? ? ? s i.
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma neg_sem_err_congr: forall (e1 e2: expr),
+  e1 ~=~ e2 ->
+  ⟦ e1 ⟧.(err) ∪ neg_sem_err ⟦ e1 ⟧.(nrm) ==
+  ⟦ e2 ⟧.(err) ∪ neg_sem_err ⟦ e2 ⟧.(nrm).
+Proof.
+  intros.
+  unfold neg_sem_err; sets_unfold.
+  intros s.
+  apply or_iff_morphism; [apply H.(err_eequiv) |].
+  apply ex_iff_morphism; intros i1.
+  apply and_iff_morphism; [apply H.(nrm_eequiv) |].
+  reflexivity.
+Qed.
+
+Lemma neg_sem_nrm_mono: forall (e1 e2: expr),
+  e1 <<= e2 ->
+  neg_sem_nrm ⟦ e1 ⟧.(nrm) ⊆
+  neg_sem_nrm ⟦ e2 ⟧.(nrm) ∪
+  ((⟦ e2 ⟧.(err) ∪ neg_sem_err ⟦ e2 ⟧.(nrm)) × int64).
+Proof.
+  unfold neg_sem_nrm, neg_sem_err; sets_unfold.
+  intros ? ? ? s i.
+  intros [i1 [? ?] ].
+  apply H.(nrm_erefine) in H0.
+  sets_unfold in H0.
+  destruct H0; [| tauto].
+  left; exists i1.
+  tauto.
+Qed.
+
+Lemma neg_sem_err_mono: forall (e1 e2: expr),
+  e1 <<= e2 ->
+  ⟦ e1 ⟧.(err) ∪ neg_sem_err ⟦ e1 ⟧.(nrm) ⊆
+  ⟦ e2 ⟧.(err) ∪ neg_sem_err ⟦ e2 ⟧.(nrm).
+Proof.
+  unfold neg_sem_err; sets_unfold.
+  intros ? ? ? s ?.
+  destruct H0; [apply H.(err_erefine) in H0; tauto |].
+  destruct H0 as [i1 [? ?] ].
+  apply H.(nrm_erefine) in H0.
+  sets_unfold in H0.
+  destruct H0; [| tauto].
+  right; exists i1.
+  tauto.
+Qed.
+
+Instance EUnop_congr: forall op,
+  Proper (eequiv ==> eequiv) (EUnop op).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  destruct op.
+  + split.
+    - apply not_sem_nrm_congr; tauto.
+    - simpl. apply not_sem_err_congr; tauto.
+  + split.
+    - apply neg_sem_nrm_congr; tauto.
+    - apply neg_sem_err_congr; tauto.
+Qed.
+
+Instance EUnop_mono: forall op,
+  Proper (erefine ==> erefine) (EUnop op).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  destruct op.
+  + split.
+    - simpl. apply not_sem_nrm_mono; tauto.
+    - simpl. apply not_sem_err_mono; tauto.
+  + split.
+    - apply neg_sem_nrm_mono; tauto.
+    - apply neg_sem_err_mono; tauto.
+Qed.
+
+(** 下面证明程序语句中的语法连接词也能保持语义等价性和精化关系。顺序执行保持等价
+    性是比较显然的。*)
+
+Instance CSeq_congr:
+  Proper (cequiv ==> cequiv ==> cequiv) CSeq.
+Proof.
+  unfold Proper, respectful.
+  intros c11 c12 ? c21 c22 ?.
+  split; simpl.
+  + rewrite H.(nrm_cequiv).
+    rewrite H0.(nrm_cequiv).
+    reflexivity.
+  + rewrite H.(nrm_cequiv).
+    rewrite H.(err_cequiv).
+    rewrite H0.(err_cequiv).
+    reflexivity.
+  + rewrite H.(nrm_cequiv).
+    rewrite H.(inf_cequiv).
+    rewrite H0.(inf_cequiv).
+    reflexivity.
+Qed.
+
+(** 为了证明顺序执行能保持精化关系，先证明两条引理。*)
+
+Lemma Rels_times_full_concat2:
+  forall {A B C: Type} (X: A -> Prop) (Y: B -> C -> Prop),
+    (X × B) ∘ Y ⊆ X × C.
+Proof.
+  intros.
+  sets_unfold.
+  intros a c.
+  intros [b [? ?] ].
+  tauto.
+Qed.
+
+Lemma Rels_times_full_concat1:
+  forall {A B: Type} (X: A -> Prop) (Y: B -> Prop),
+    (X × B) ∘ Y ⊆ X.
+Proof.
+  intros.
+  sets_unfold.
+  intros a.
+  intros [b [? ?] ].
+  tauto.
+Qed.
+
+(** 下面证明顺序执行能保持精化关系。*)
+
+Instance CSeq_mono:
+  Proper (crefine ==> crefine ==> crefine) CSeq.
+Proof.
+  unfold Proper, respectful.
+  intros c11 c12 ? c21 c22 ?.
+  split; simpl.
+  + rewrite H.(nrm_crefine).
+    rewrite H0.(nrm_crefine).
+    rewrite Rels_concat_union_distr_l.
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_times_full_concat2.
+    sets_unfold; intros s1 s2; tauto.
+  + rewrite H.(err_crefine).
+    rewrite H.(nrm_crefine).
+    rewrite H0.(err_crefine).
+    rewrite Rels_concat_union_distr_r.
+    rewrite Rels_times_full_concat1.
+    sets_unfold; intros s; tauto.
+  + rewrite H.(inf_crefine).
+    rewrite H0.(inf_crefine).
+    rewrite H.(nrm_crefine).
+    rewrite Rels_concat_union_distr_l.
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_times_full_concat1.
+    sets_unfold; intros s; tauto.
+Qed.
+
+(** 为了证明if语句能保持语义等价关系与精化关系，先证明_[test_true]_与
+    _[test_false]_的性质。*)
+
+Lemma test_true_mono: forall (e1 e2: expr),
+  e1 <<= e2 ->
+  test_true ⟦ e1 ⟧ ⊆
+  test_true ⟦ e2 ⟧ ∪ (⟦ e2 ⟧.(err) × state).
+Proof.
+  intros.
+  unfold test_true; sets_unfold; intros s1 s2.
+  intros [ [i [? ?] ] ?].
+  apply H.(nrm_erefine) in H0.
+  sets_unfold in H0.
+  destruct H0; [| tauto].
+  left; split; [| tauto].
+  exists i; tauto.
+Qed.
+
+Lemma test_false_mono: forall (e1 e2: expr),
+  e1 <<= e2 ->
+  test_false ⟦ e1 ⟧ ⊆
+  test_false ⟦ e2 ⟧ ∪ (⟦ e2 ⟧.(err) × state).
+Proof.
+  intros.
+  unfold test_false; sets_unfold; intros s1 s2.
+  intros [? ?].
+  apply H.(nrm_erefine) in H0.
+  sets_unfold in H0.
+  destruct H0; [| tauto].
+  tauto.
+Qed.
+
+Lemma test_true_congr: forall (e1 e2: expr),
+  e1 ~=~ e2 ->
+  test_true ⟦ e1 ⟧ == test_true ⟦ e2 ⟧.
+Proof.
+  intros.
+  unfold test_true; sets_unfold; intros s1 s2.
+  apply and_iff_morphism; [| reflexivity].
+  apply ex_iff_morphism; intros i.
+  apply and_iff_morphism; [| reflexivity].
+  apply H.(nrm_eequiv).
+Qed.
+
+Lemma test_false_congr: forall (e1 e2: expr),
+  e1 ~=~ e2 ->
+  test_false ⟦ e1 ⟧ == test_false ⟦ e2 ⟧.
+Proof.
+  intros.
+  unfold test_false; sets_unfold; intros s1 s2.
+  apply and_iff_morphism; [| reflexivity].
+  apply H.(nrm_eequiv).
+Qed.
+
+(** 基于此就可以证明if语句能保持语义等价关系与精化关系。*)
+
+Instance CIf_congr:
+  Proper (eequiv ==> cequiv ==> cequiv ==> cequiv) CIf.
+Proof.
+  unfold Proper, respectful.
+  intros e1 e2 ? c11 c12 ? c21 c22 ?.
+  split; simpl.
+  + rewrite (test_true_congr _ _ H).
+    rewrite (test_false_congr _ _ H).
+    rewrite H0.(nrm_cequiv).
+    rewrite H1.(nrm_cequiv).
+    reflexivity.
+  + rewrite (test_true_congr _ _ H).
+    rewrite (test_false_congr _ _ H).
+    rewrite H.(err_eequiv).
+    rewrite H0.(err_cequiv).
+    rewrite H1.(err_cequiv).
+    reflexivity.
+  + rewrite (test_true_congr _ _ H).
+    rewrite (test_false_congr _ _ H).
+    rewrite H0.(inf_cequiv).
+    rewrite H1.(inf_cequiv).
+    reflexivity.
+Qed.
+
+Instance CIf_mono:
+  Proper (erefine ==> crefine ==> crefine ==> crefine) CIf.
+Proof.
+  unfold Proper, respectful.
+  intros e1 e2 ? c11 c12 ? c21 c22 ?.
+  split; simpl.
+  + rewrite (test_true_mono e1 e2 H).
+    rewrite (test_false_mono e1 e2 H).
+    rewrite H0.(nrm_crefine), H1.(nrm_crefine).
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_concat_union_distr_l.
+    rewrite ! Rels_times_full_concat2.
+    sets_unfold; intros s1 s2; tauto.
+  + rewrite (test_true_mono e1 e2 H).
+    rewrite (test_false_mono e1 e2 H).
+    rewrite H.(err_erefine).
+    rewrite H0.(err_crefine), H1.(err_crefine).
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_times_full_concat1.
+    sets_unfold; intros s; tauto.
+  + rewrite (test_true_mono e1 e2 H).
+    rewrite (test_false_mono e1 e2 H).
+    rewrite H0.(inf_crefine), H1.(inf_crefine).
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_concat_union_distr_l.
+    rewrite ! Rels_times_full_concat1.
+    sets_unfold; intros s; tauto.
+Qed.
+
+(** 要证明while语句保持语义等价关系，就需要运用集合并集的有关性质，还需要对迭代
+    的次数进行归纳。*)
+
+Instance CWhile_congr:
+  Proper (eequiv ==> cequiv ==> cequiv) CWhile.
+Proof.
+  unfold Proper, respectful.
+  intros e1 e2 ? c1 c2 ?.
+  split; simpl.
+  (** 正常运行终止的情况。*)
+  + apply Sets_indexed_union_congr; intros n.
+    induction n; simpl.
+    - reflexivity.
+    - rewrite IHn.
+      rewrite (test_true_congr _ _ H).
+      rewrite (test_false_congr _ _ H).
+      rewrite H0.(nrm_cequiv).
+      reflexivity.
+  (** 运行出错的情况。*)
+  + apply Sets_indexed_union_congr; intros n.
+    induction n; simpl.
+    - reflexivity.
+    - rewrite IHn.
+      rewrite (test_true_congr _ _ H).
+      rewrite H.(err_eequiv).
+      rewrite H0.(nrm_cequiv).
+      rewrite H0.(err_cequiv).
+      reflexivity.
+  (** 运行不终止的情况。*)
+  + apply Sets_general_union_congr.
+    intros X.
+    unfold_CL_defs.
+    rewrite H0.(nrm_cequiv).
+    rewrite H0.(inf_cequiv).
+    rewrite (test_true_congr _ _ H).
+    reflexivity.
+Qed.
+
+(** 要证明while语句保持精化关系就更复杂一些了。*)
+
+Definition boundedLB_nrm
+             (D0: EDenote)
+             (D1: CDenote)
+             (n: nat):
+  state -> state -> Prop :=
+  Nat.iter
+    n
+    (fun X => test_true D0 ∘ D1.(nrm) ∘ X ∪ test_false D0)
+    ∅.
+
+Definition boundedLB_err
+             (D0: EDenote)
+             (D1: CDenote)
+             (n: nat):
+  state -> Prop :=
+  Nat.iter
+    n
+    (fun X => test_true D0 ∘ D1.(nrm) ∘ X ∪ test_true D0 ∘ D1.(err) ∪ D0.(err))
+    ∅.
+
+Definition is_inf
+             (D0: EDenote)
+             (D1: CDenote)
+             (X: state -> Prop): Prop :=
+  X ⊆ test_true D0 ∘ D1.(nrm) ∘ X ∪
+      test_true D0 ∘ D1.(inf).
+
+Lemma boundedLB_nrm_mono_aux:
+  forall (e1 e2: expr) (c1 c2: com) n,
+    e1 <<= e2 ->
+    c1 <<= c2 ->
+    boundedLB_nrm ⟦ e1 ⟧ ⟦ c1 ⟧ n ⊆
+    boundedLB_nrm ⟦ e2 ⟧ ⟦ c2 ⟧ n ∪
+    (boundedLB_err ⟦ e2 ⟧ ⟦ c2 ⟧ n × state).
+Proof.
+  intros.
+  induction n; simpl.
+  + apply Sets_empty_included.
+  + rewrite IHn.
+    rewrite (test_true_mono _ _ H).
+    rewrite (test_false_mono _ _ H).
+    rewrite H0.(nrm_crefine).
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_concat_union_distr_l.
+    rewrite ! Rels_times_full_concat2.
+    sets_unfold; intros s1 s2; tauto.
+Qed.
+
+Lemma boundedLB_err_mono_aux:
+  forall (e1 e2: expr) (c1 c2: com) n,
+    e1 <<= e2 ->
+    c1 <<= c2 ->
+    boundedLB_err ⟦ e1 ⟧ ⟦ c1 ⟧ n ⊆
+    boundedLB_err ⟦ e2 ⟧ ⟦ c2 ⟧ n.
+Proof.
+  intros.
+  induction n; simpl.
+  + apply Sets_empty_included.
+  + rewrite IHn.
+    rewrite (test_true_mono _ _ H).
+    rewrite H.(err_erefine).
+    rewrite H0.(nrm_crefine).
+    rewrite H0.(err_crefine).
+    rewrite ! Rels_concat_union_distr_r.
+    rewrite ! Rels_concat_union_distr_l.
+    rewrite ! Rels_times_full_concat1.
+    sets_unfold; intros s; tauto.
+Qed.
+
+Lemma Sets_complement_indexed_union:
+  forall {A I: Type} (Xs: I -> A -> Prop),
+    Sets.complement (⋃ Xs) ==
+    ⋂ (fun n => Sets.complement (Xs n)).
+Proof.
+  intros.
+  sets_unfold.
+  split.
+  + apply not_ex_all_not.
+  + apply all_not_not_ex.
+Qed.
+
+Definition noerrorLB (D1: EDenote) (D2: CDenote): state -> Prop :=
+  Sets.complement (⋃ (boundedLB_err D1 D2)).
+
+Lemma iter_err_fact:
+  forall (D1: EDenote) (D2: CDenote),
+    test_true D1 ∘ D2.(nrm) ∘ ⋃ (boundedLB_err D1 D2) ⊆
+    ⋃ (boundedLB_err D1 D2).
+Proof.
+  intros.
+  rewrite ! Rels_concat_indexed_union_distr_l.
+  apply Sets_indexed_union_included; intros n.
+  rewrite <- (Sets_included_indexed_union _ _ (S n)).
+  simpl.
+  sets_unfold; intros s; tauto.
+Qed.
+
+Lemma Rels_concat_excluding_r:
+  forall
+    {A B: Type}
+    (R: A -> B -> Prop)
+    (S T: B -> Prop),
+    (R ∘ S) ∩ Sets.complement (R ∘ T) ⊆
+    R ∘ (S ∩ Sets.complement T).
+Proof.
+  intros.
+  Sets_unfold; intros a.
+  intros [ [b [? ?] ] ?].
+  exists b.
+  split; [tauto |].
+  split; [tauto |].
+  assert (T b -> exists b : B, R a b /\ T b); [| tauto].
+  clear H1; intros.
+  exists b; tauto.
+Qed.
+
+Lemma noerrorLB_fact1:
+  forall (D1: EDenote) (D2: CDenote),
+    D1.(err) ∩ noerrorLB D1 D2 == ∅.
+Proof.
+  intros.
+  unfold noerrorLB.
+  rewrite Sets_complement_indexed_union.
+  apply Sets_equiv_Sets_included.
+  split; [| apply Sets_empty_included].
+  rewrite (Sets_indexed_intersect_included _ _ (S O)).
+  simpl.
+  sets_unfold; intros s.
+  tauto.
+Qed.
+
+Lemma noerrorLB_fact2:
+  forall (D1: EDenote) (D2: CDenote),
+    (test_true D1 ∘ D2.(err)) ∩ noerrorLB D1 D2 == ∅.
+Proof.
+  intros.
+  unfold noerrorLB.
+  rewrite Sets_complement_indexed_union.
+  apply Sets_equiv_Sets_included.
+  split; [| apply Sets_empty_included].
+  rewrite (Sets_indexed_intersect_included _ _ (S O)).
+  simpl.
+  sets_unfold; intros s.
+  tauto.
+Qed.
+
+Lemma inf_mono_aux:
+  forall (e1 e2: expr) (c1 c2: com) X,
+    e1 <<= e2 ->
+    c1 <<= c2 ->
+    is_inf ⟦ e1 ⟧ ⟦ c1 ⟧ X ->
+    is_inf ⟦ e2 ⟧ ⟦ c2 ⟧ (X ∩ noerrorLB ⟦ e2 ⟧ ⟦ c2 ⟧).
+Proof.
+  unfold is_inf.
+  intros.
+  rewrite H1 at 1.
+  rewrite (test_true_mono _ _ H).
+  rewrite H0.(nrm_crefine).
+  rewrite H0.(inf_crefine).
+  rewrite ! Rels_concat_union_distr_r.
+  rewrite ! Rels_concat_union_distr_l.
+  rewrite ! Rels_times_full_concat1.
+  rewrite ! Sets_intersect_union_distr_r.
+  rewrite noerrorLB_fact1.
+  rewrite noerrorLB_fact2.
+  rewrite ! Sets_union_empty.
+  unfold noerrorLB at 1.
+  rewrite <- iter_err_fact at 1.
+  rewrite ! Rels_concat_excluding_r.
+  fold (noerrorLB ⟦ e2 ⟧ ⟦ c2 ⟧).
+  sets_unfold; intros s; tauto.
+Qed.
+
+Instance CWhile_mono:
+  Proper (erefine ==> crefine ==> crefine) CWhile.
+Proof.
+  unfold Proper, respectful.
+  intros e1 e2 ? c1 c2 ?.
+  split; simpl.
+  + apply Sets_indexed_union_included; intros n.
+    unfold BW_LFix. unfold_CPO_defs.
+    rewrite <- ! (Sets_included_indexed_union _ _ n).
+    apply boundedLB_nrm_mono_aux; tauto.
+  + apply Sets_indexed_union_included; intros n.
+    unfold BW_LFix. unfold_CPO_defs.
+    rewrite <- (Sets_included_indexed_union _ _ n).
+    apply boundedLB_err_mono_aux; tauto.
+  + apply Sets_general_union_included. unfold_CL_defs.
+    intros X ?.
+    pose proof inf_mono_aux _ _ _ _ _ H H0 H1.
+    unfold KT_GFix; unfold_CL_defs.
+    rewrite <- (Sets_included_general_union _ (X ∩ noerrorLB ⟦ e2 ⟧ ⟦ c2 ⟧))
+      by (exact H2).
+    unfold noerrorLB.
+    sets_unfold; intros s; tauto.
+Qed.
+
+(** 下面是一个证明中使用了语义等价的重要性质：语义等价是等价关系、语法连接词保持等价性。*)
+
+Example cequiv_sample: forall (e: expr) (c1 c2 c3 c4: com),
+  [[ if (e) then { c1 } else { c2 }; c3; c4 ]] ~=~
+  [[ if (e) then { c1; c3 } else { c2; c3 }; c4 ]].
+Proof.
+  intros.
+  rewrite CSeq_assoc.
+  rewrite CIf_CSeq.
+  reflexivity.
+Qed.
 

@@ -1232,6 +1232,13 @@ Proof.
   + apply GlbP_sets.
 Qed.
 
+Arguments Lub_sets: simpl never.
+Arguments Glb_sets: simpl never.
+
+Ltac unfold_CL_defs :=
+  unfold order_rel, equiv, lub, glb,
+         R_sets, Equiv_sets, Lub_sets, Glb_sets.
+
 Local Close Scope sets_scope.
 Local Close Scope order_scope.
 
@@ -1250,7 +1257,7 @@ Definition while_sem
              (D0: EDenote)
              (D1: CDenote): CDenote :=
   {|
-    nrm := BW_LFix
+    nrm := @BW_LFix _ _ _ _ _ oCPO_sets
              (fun X =>
                 test_true D0 ∘ D1.(nrm) ∘ X ∪
                 test_false D0);
