@@ -1257,7 +1257,7 @@ Definition while_sem
              (D0: EDenote)
              (D1: CDenote): CDenote :=
   {|
-    nrm := @BW_LFix _ _ _ _ _ oCPO_sets
+    nrm := BW_LFix
              (fun X =>
                 test_true D0 ∘ D1.(nrm) ∘ X ∪
                 test_false D0);
@@ -1292,7 +1292,7 @@ End DntSem_While2.
 
 (** * WhileDeref语言的语义 *)
 
-Module DntSem_WhileDeref.
+Module DntSem_WhileDeref1.
 Import Lang_While.
 Import Lang_WhileDeref.
 
@@ -1630,7 +1630,7 @@ Definition if_sem
            (test_false D0 ∘ D2.(inf))
   |}.
 
-Fixpoint iter_nrm_lt_n
+Fixpoint boundedLB_nrm
            (D0: EDenote)
            (D1: CDenote)
            (n: nat):
@@ -1638,11 +1638,11 @@ Fixpoint iter_nrm_lt_n
   match n with
   | O => ∅
   | S n0 =>
-      (test_true D0 ∘ D1.(nrm) ∘ iter_nrm_lt_n D0 D1 n0) ∪
+      (test_true D0 ∘ D1.(nrm) ∘ boundedLB_nrm D0 D1 n0) ∪
       (test_false D0)
   end.
 
-Fixpoint iter_err_lt_n
+Fixpoint boundedLB_err
            (D0: EDenote)
            (D1: CDenote)
            (n: nat): state -> Prop :=
@@ -1650,7 +1650,7 @@ Fixpoint iter_err_lt_n
   | O => ∅
   | S n0 =>
      (test_true D0 ∘
-        ((D1.(nrm) ∘ iter_err_lt_n D0 D1 n0) ∪
+        ((D1.(nrm) ∘ boundedLB_err D0 D1 n0) ∪
          D1.(err))) ∪
       D0.(err)
   end.
@@ -1665,8 +1665,8 @@ Definition while_sem
              (D0: EDenote)
              (D1: CDenote): CDenote :=
   {|
-    nrm := ⋃ (iter_nrm_lt_n D0 D1);
-    err := ⋃ (iter_err_lt_n D0 D1);
+    nrm := ⋃ (boundedLB_nrm D0 D1);
+    err := ⋃ (boundedLB_err D0 D1);
     inf := Sets.general_union (is_inf D0 D1);
   |}.
 
@@ -1734,11 +1734,57 @@ Fixpoint eval_com (c: com): CDenote :=
   end.
 
 
-End DntSem_WhileDeref.
+End DntSem_WhileDeref1.
+
+Module DntSem_WhileDeref2.
+Import Lang_While.
+Import Lang_WhileDeref
+       DntSem_WhileDeref1 EDenote CDenote
+       BWFix KTFix Sets_CPO Sets_CL.
+
+
+(** While语句的语义也可以用不动点定义。*)
+
+Definition while_sem
+             (D0: EDenote)
+             (D1: CDenote): CDenote :=
+  {|
+    nrm := BW_LFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_false D0);
+    err := BW_LFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_true D0 ∘ D1.(err) ∪ D0.(err));
+    inf := KT_GFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_true D0 ∘ D1.(inf));
+  |}.
+
+Fixpoint eval_com (c: com): CDenote :=
+  match c with
+  | CSkip =>
+      skip_sem
+  | CAsgnVar X e =>
+      asgn_var_sem X (eval_expr e)
+  | CAsgnDeref e1 e2 =>
+      asgn_deref_sem (eval_expr e1) (eval_expr e2)
+  | CSeq c1 c2 =>
+      seq_sem (eval_com c1) (eval_com c2)
+  | CIf e c1 c2 =>
+      if_sem (eval_expr e) (eval_com c1) (eval_com c2)
+  | CWhile e c1 =>
+      while_sem (eval_expr e) (eval_com c1)
+  end.
+
+
+End DntSem_WhileDeref2.
 
 (** * WhileD语言的语义 *)
 
-Module DntSem_WhileD.
+Module DntSem_WhileD1.
 Import Lang_While.
 Import Lang_WhileD.
 
@@ -2092,7 +2138,7 @@ Definition if_sem
            (test_false D0 ∘ D2.(inf))
   |}.
 
-Fixpoint iter_nrm_lt_n
+Fixpoint boundedLB_nrm
            (D0: EDenote)
            (D1: CDenote)
            (n: nat):
@@ -2100,11 +2146,11 @@ Fixpoint iter_nrm_lt_n
   match n with
   | O => ∅
   | S n0 =>
-      (test_true D0 ∘ D1.(nrm) ∘ iter_nrm_lt_n D0 D1 n0) ∪
+      (test_true D0 ∘ D1.(nrm) ∘ boundedLB_nrm D0 D1 n0) ∪
       (test_false D0)
   end.
 
-Fixpoint iter_err_lt_n
+Fixpoint boundedLB_err
            (D0: EDenote)
            (D1: CDenote)
            (n: nat): state -> Prop :=
@@ -2112,7 +2158,7 @@ Fixpoint iter_err_lt_n
   | O => ∅
   | S n0 =>
      (test_true D0 ∘
-        ((D1.(nrm) ∘ iter_err_lt_n D0 D1 n0) ∪
+        ((D1.(nrm) ∘ boundedLB_err D0 D1 n0) ∪
          D1.(err))) ∪
       D0.(err)
   end.
@@ -2127,8 +2173,8 @@ Definition while_sem
              (D0: EDenote)
              (D1: CDenote): CDenote :=
   {|
-    nrm := ⋃ (iter_nrm_lt_n D0 D1);
-    err := ⋃ (iter_err_lt_n D0 D1);
+    nrm := ⋃ (boundedLB_nrm D0 D1);
+    err := ⋃ (boundedLB_err D0 D1);
     inf := Sets.general_union (is_inf D0 D1);
   |}.
 
@@ -2188,11 +2234,57 @@ Fixpoint eval_com (c: com): CDenote :=
   end.
 
 
-End DntSem_WhileD.
+End DntSem_WhileD1.
+
+Module DntSem_WhileD2.
+Import Lang_While.
+Import Lang_WhileD
+       DntSem_WhileD1 EDenote CDenote
+       BWFix KTFix Sets_CPO Sets_CL.
+
+
+(** While语句的语义也可以用不动点定义。*)
+
+Definition while_sem
+             (D0: EDenote)
+             (D1: CDenote): CDenote :=
+  {|
+    nrm := BW_LFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_false D0);
+    err := BW_LFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_true D0 ∘ D1.(err) ∪ D0.(err));
+    inf := KT_GFix
+             (fun X =>
+                test_true D0 ∘ D1.(nrm) ∘ X ∪
+                test_true D0 ∘ D1.(inf));
+  |}.
+
+Fixpoint eval_com (c: com): CDenote :=
+  match c with
+  | CSkip =>
+      skip_sem
+  | CAsgnVar X e =>
+      asgn_var_sem X (eval_r e)
+  | CAsgnDeref e1 e2 =>
+      asgn_deref_sem (eval_r e1) (eval_r e2)
+  | CSeq c1 c2 =>
+      seq_sem (eval_com c1) (eval_com c2)
+  | CIf e c1 c2 =>
+      if_sem (eval_r e) (eval_com c1) (eval_com c2)
+  | CWhile e c1 =>
+      while_sem (eval_r e) (eval_com c1)
+  end.
+
+
+End DntSem_WhileD2.
 
 (** * WhileDC语言的语义 *)
 
-Module DntSem_WhileDC.
+Module DntSem_WhileDC1.
 Import Lang_While.
 Import Lang_WhileDC.
 
@@ -2610,7 +2702,7 @@ Definition asgn_var_sem
 
 Module WhileSem.
 
-Fixpoint iter_nrm_lt_n
+Fixpoint boundedLB_nrm
            (D0: EDenote)
            (D1: CDenote)
            (n: nat):
@@ -2618,35 +2710,32 @@ Fixpoint iter_nrm_lt_n
   match n with
   | O => ∅
   | S n0 =>
-      (test_true D0 ∘
-         ((D1.(nrm) ∘ iter_nrm_lt_n D0 D1 n0) ∪
-          (D1.(cnt) ∘ iter_nrm_lt_n D0 D1 n0) ∪
-          D1.(brk))) ∪
+      (test_true D0 ∘ D1.(nrm) ∘ boundedLB_nrm D0 D1 n0) ∪
+      (test_true D0 ∘ D1.(cnt) ∘ boundedLB_nrm D0 D1 n0) ∪
+      (test_true D0 ∘ D1.(brk)) ∪
       (test_false D0)
   end.
 
-Fixpoint iter_err_lt_n
+Fixpoint boundedLB_err
            (D0: EDenote)
            (D1: CDenote)
            (n: nat): state -> Prop :=
   match n with
   | O => ∅
   | S n0 =>
-     (test_true D0 ∘
-        ((D1.(nrm) ∘ iter_err_lt_n D0 D1 n0) ∪
-         (D1.(cnt) ∘ iter_err_lt_n D0 D1 n0) ∪
-         D1.(err))) ∪
-      D0.(err)
+     (test_true D0 ∘ D1.(nrm) ∘ boundedLB_err D0 D1 n0) ∪
+     (test_true D0 ∘ D1.(cnt) ∘ boundedLB_err D0 D1 n0) ∪
+     (test_true D0 ∘ D1.(err)) ∪
+     (D0.(err))
   end.
 
 Definition is_inf
              (D0: EDenote)
              (D1: CDenote)
              (X: state -> Prop): Prop :=
-  X ⊆ test_true D0 ∘
-        ((D1.(nrm) ∘ X) ∪
-         (D1.(cnt) ∘ X) ∪
-         D1.(inf)).
+  X ⊆ test_true D0 ∘ D1.(nrm) ∘ X ∪
+      test_true D0 ∘ D1.(cnt) ∘ X ∪
+      test_true D0 ∘ D1.(inf).
 
 End WhileSem.
 
@@ -2654,10 +2743,10 @@ Definition while_sem
              (D0: EDenote)
              (D1: CDenote): CDenote :=
   {|
-    nrm := ⋃ (WhileSem.iter_nrm_lt_n D0 D1);
+    nrm := ⋃ (WhileSem.boundedLB_nrm D0 D1);
     brk := ∅;
     cnt := ∅;
-    err := ⋃ (WhileSem.iter_err_lt_n D0 D1);
+    err := ⋃ (WhileSem.boundedLB_err D0 D1);
     inf := Sets.general_union (WhileSem.is_inf D0 D1);
   |}.
 
@@ -2665,21 +2754,22 @@ Definition do_while_sem
              (D0: CDenote)
              (D1: EDenote): CDenote :=
   {|
-    nrm := (D0.(nrm) ∪ D0.(cnt)) ∘
-           ⋃ (WhileSem.iter_nrm_lt_n D1 D0);
+    nrm := D0.(nrm) ∘ ⋃ (WhileSem.boundedLB_nrm D1 D0) ∪
+           D0.(cnt) ∘ ⋃ (WhileSem.boundedLB_nrm D1 D0) ∪
+           D0.(brk);
     brk := ∅;
     cnt := ∅;
-    err := D0.(err) ∪
-           ((D0.(nrm) ∪ D0.(cnt)) ∘
-            ⋃ (WhileSem.iter_err_lt_n D1 D0));
-    inf := D0.(inf) ∪
-           ((D0.(nrm) ∪ D0.(cnt)) ∘
-            Sets.general_union (WhileSem.is_inf D1 D0));
+    err := D0.(nrm) ∘ ⋃ (WhileSem.boundedLB_err D1 D0) ∪
+           D0.(cnt) ∘ ⋃ (WhileSem.boundedLB_err D1 D0) ∪
+           D0.(err);
+    inf := D0.(nrm) ∘ Sets.general_union (WhileSem.is_inf D1 D0) ∪
+           D0.(cnt) ∘ Sets.general_union (WhileSem.is_inf D1 D0) ∪
+           D0.(inf)
   |}.
 
 Module ForSem.
 
-Fixpoint iter_nrm_lt_n
+Fixpoint boundedLB_nrm
            (D0: EDenote)
            (D1: CDenote)
            (D2: CDenote)
@@ -2688,14 +2778,13 @@ Fixpoint iter_nrm_lt_n
   match n with
   | O => ∅
   | S n0 =>
-      (test_true D0 ∘
-         ((D2.(nrm) ∘ D1.(nrm) ∘ iter_nrm_lt_n D0 D1 D2 n0) ∪
-          (D2.(cnt) ∘ D1.(nrm) ∘ iter_nrm_lt_n D0 D1 D2 n0) ∪
-          D2.(brk))) ∪
-      (test_false D0)
+      test_true D0 ∘ D2.(nrm) ∘ D1.(nrm) ∘ boundedLB_nrm D0 D1 D2 n0 ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(nrm) ∘ boundedLB_nrm D0 D1 D2 n0 ∪
+      test_true D0 ∘ D2.(brk) ∪
+      test_false D0
   end.
 
-Fixpoint iter_err_lt_n
+Fixpoint boundedLB_err
            (D0: EDenote)
            (D1: CDenote)
            (D2: CDenote)
@@ -2703,10 +2792,15 @@ Fixpoint iter_err_lt_n
   match n with
   | O => ∅
   | S n0 =>
-     (test_true D0 ∘
-        ((D2.(nrm) ∘ D1.(nrm) ∘ iter_err_lt_n D0 D1 D2 n0) ∪
-         (D2.(cnt) ∘ D1.(nrm) ∘ iter_err_lt_n D0 D1 D2 n0) ∪
-         D2.(err))) ∪
+      test_true D0 ∘ D2.(nrm) ∘ D1.(nrm) ∘ boundedLB_err D0 D1 D2 n0 ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(nrm) ∘ boundedLB_err D0 D1 D2 n0 ∪
+      test_true D0 ∘ D2.(nrm) ∘ D1.(brk) ∘ Sets.full ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(brk) ∘ Sets.full ∪
+      test_true D0 ∘ D2.(nrm) ∘ D1.(cnt) ∘ Sets.full ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(cnt) ∘ Sets.full ∪
+      test_true D0 ∘ D2.(nrm) ∘ D1.(err) ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(err) ∪
+      test_true D0 ∘ D2.(err) ∪
       D0.(err)
   end.
 
@@ -2715,12 +2809,11 @@ Definition is_inf
              (D1: CDenote)
              (D2: CDenote)
              (X: state -> Prop): Prop :=
-  X ⊆ test_true D0 ∘
-        ((D2.(nrm) ∘ D1.(nrm) ∘ X) ∪
-         (D2.(cnt) ∘ D1.(nrm) ∘ X) ∪
-         (D2.(nrm) ∘ D1.(inf)) ∪
-         (D2.(nrm) ∘ D1.(inf)) ∪
-         D2.(inf)).
+  X ⊆ test_true D0 ∘ D2.(nrm) ∘ D1.(nrm) ∘ X ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(nrm) ∘ X ∪
+      test_true D0 ∘ D2.(nrm) ∘ D1.(inf) ∪
+      test_true D0 ∘ D2.(cnt) ∘ D1.(inf) ∪
+      test_true D0 ∘ D2.(inf).
 
 End ForSem.
 
@@ -2730,10 +2823,13 @@ Definition for_sem
              (D1: CDenote)
              (D2: CDenote): CDenote :=
   {|
-    nrm := D.(nrm) ∘ ⋃ (ForSem.iter_nrm_lt_n D0 D1 D2);
+    nrm := D.(nrm) ∘ ⋃ (ForSem.boundedLB_nrm D0 D1 D2);
     brk := ∅;
     cnt := ∅;
-    err := D.(err) ∪ (D.(nrm) ∘ ⋃ (ForSem.iter_err_lt_n D0 D1 D2));
+    err := D.(err) ∪
+           D.(brk) ∘ Sets.full ∪
+           D.(cnt) ∘ Sets.full ∪
+           D.(nrm) ∘ ⋃ (ForSem.boundedLB_err D0 D1 D2);
     inf := D.(inf) ∪ (D.(nrm) ∘ Sets.general_union (ForSem.is_inf D0 D1 D2));
   |}.
 
@@ -2764,5 +2860,141 @@ Fixpoint eval_com (c: com): CDenote :=
 
 
 
-End DntSem_WhileDC.
+End DntSem_WhileDC1.
+
+Module DntSem_WhileDC2.
+Import Lang_While.
+Import Lang_WhileDC
+       DntSem_WhileDC1 EDenote CDenote
+       BWFix KTFix Sets_CPO Sets_CL.
+
+
+
+(** 各个循环语句的语义也可以用不动点定义。*)
+
+Definition while_sem
+             (D0: EDenote)
+             (D1: CDenote): CDenote :=
+  {|
+    nrm := BW_LFix
+             (fun X =>
+               test_true D0 ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D1.(cnt) ∘ X ∪
+               test_true D0 ∘ D1.(brk) ∪
+               test_false D0);
+    brk := ∅;
+    cnt := ∅;
+    err := BW_LFix
+             (fun X =>
+               test_true D0 ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D1.(cnt) ∘ X ∪
+               test_true D0 ∘ D1.(err) ∪
+               D0.(err));
+    inf := KT_GFix
+             (fun X =>
+               test_true D0 ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D1.(cnt) ∘ X ∪
+               test_true D0 ∘ D1.(inf));
+  |}.
+
+Definition do_while_sem
+             (D0: CDenote)
+             (D1: EDenote): CDenote :=
+  {|
+    nrm := (D0.(nrm) ∪ D0.(cnt)) ∘
+           BW_LFix
+             (fun X =>
+               test_true D1 ∘ D0.(nrm) ∘ X ∪
+               test_true D1 ∘ D0.(cnt) ∘ X ∪
+               test_true D1 ∘ D0.(brk) ∪
+               test_false D1);
+    brk := ∅;
+    cnt := ∅;
+    err := D0.(err) ∪
+           (D0.(nrm) ∪ D0.(cnt)) ∘
+           BW_LFix
+             (fun X =>
+               test_true D1 ∘ D0.(nrm) ∘ X ∪
+               test_true D1 ∘ D0.(cnt) ∘ X ∪
+               test_true D1 ∘ D0.(err) ∪
+               D1.(err));
+    inf := D0.(inf) ∪
+           (D0.(nrm) ∪ D0.(cnt)) ∘
+           KT_GFix
+           (fun X =>
+              test_true D1 ∘ D0.(nrm) ∘ X ∪
+              test_true D1 ∘ D0.(cnt) ∘ X ∪
+              test_true D1 ∘ D0.(inf));
+  |}.
+
+Definition for_sem
+             (D: CDenote)
+             (D0: EDenote)
+             (D1: CDenote)
+             (D2: CDenote): CDenote :=
+  {|
+    nrm := D.(nrm) ∘
+           BW_LFix
+             (fun X =>
+               test_true D0 ∘ D2.(nrm) ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D2.(brk) ∪
+               test_false D0);
+    brk := ∅;
+    cnt := ∅;
+    err := D.(err) ∪
+           D.(nrm) ∘
+           BW_LFix
+             (fun X =>
+               test_true D0 ∘ D2.(nrm) ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D2.(nrm) ∘ D1.(brk) ∘ Sets.full ∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(brk) ∘ Sets.full ∪
+               test_true D0 ∘ D2.(nrm) ∘ D1.(cnt) ∘ Sets.full ∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(cnt) ∘ Sets.full ∪
+               test_true D0 ∘ D2.(nrm) ∘ D1.(err)∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(err)∪
+               test_true D0 ∘ D2.(err) ∪
+               D0.(err));
+    inf := D.(inf) ∪
+           D.(nrm) ∘
+           KT_GFix
+             (fun X =>
+               test_true D0 ∘ D2.(nrm) ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(nrm) ∘ X ∪
+               test_true D0 ∘ D2.(nrm) ∘ D1.(inf) ∪
+               test_true D0 ∘ D2.(cnt) ∘ D1.(inf) ∪
+               test_true D0 ∘ D2.(inf))
+  |}.
+
+Fixpoint eval_com (c: com): CDenote :=
+  match c with
+  | CSkip =>
+      skip_sem
+  | CAsgnVar X e =>
+      asgn_var_sem X (eval_r e)
+  | CAsgnDeref e1 e2 =>
+      asgn_deref_sem (eval_r e1) (eval_r e2)
+  | CSeq c1 c2 =>
+      seq_sem (eval_com c1) (eval_com c2)
+  | CIf e c1 c2 =>
+      if_sem (eval_r e) (eval_com c1) (eval_com c2)
+  | CWhile e c1 =>
+      while_sem (eval_r e) (eval_com c1)
+  | CDoWhile c1 e =>
+      do_while_sem (eval_com c1) (eval_r e)
+  | CFor c0 e c1 c2 =>
+      for_sem
+        (eval_com c0) (eval_r e) (eval_com c1) (eval_com c2)
+  | CContinue =>
+      cnt_sem
+  | CBreak =>
+      brk_sem
+  end.
+
+
+
+End DntSem_WhileDC2.
+
+
 

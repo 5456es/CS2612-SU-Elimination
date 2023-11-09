@@ -955,9 +955,6 @@ Proof.
   (** 布尔二元运算的情况 *)
   + split.
     - simpl.
-    Locate "×".
-    Set Printing All.
-
       apply (or_sem_nrm_mono x y x0 y0); tauto.
     - apply or_sem_err_mono; tauto.
   + split.

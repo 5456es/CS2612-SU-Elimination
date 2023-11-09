@@ -1187,10 +1187,10 @@ Import BWFix.
     _[Intance]_关键字。如果_[Class]_中只有一个域并且_[Class]_的定义没有使用大括
     号包围所有域，那么这个域的定义就是整个_[Class]_类型的值的定义；否则_[Class]_
     类型的值应当像_[Record]_类型的值一样定义。*)
-Instance R_while_fin {A B: Type}: Order (A -> B -> Prop) :=
+Local Instance R_while_fin {A B: Type}: Order (A -> B -> Prop) :=
   Sets.included.
 
-Instance Equiv_while_fin {A B: Type}: Equiv (A -> B -> Prop) :=
+Local Instance Equiv_while_fin {A B: Type}: Equiv (A -> B -> Prop) :=
   Sets.equiv.
 
 (** 下面证明这是一个偏序关系。证明的时候需要展开上面两个二元关系（一个表示序关系
@@ -1198,7 +1198,7 @@ Instance Equiv_while_fin {A B: Type}: Equiv (A -> B -> Prop) :=
     全部展开，前者表示将上面的定义展开，后者表示将从_[Class Order]_取出
     _[order_rel]_域这一操作展开。其余的证明则只需用_[Sets_unfold]_证明集合相关的
     性质。*)
-Instance PO_while_fin {A B: Type}: PartialOrder_Setoid (A -> B -> Prop).
+Local Instance PO_while_fin {A B: Type}: PartialOrder_Setoid (A -> B -> Prop).
 Proof.
   split.
   + unfold Reflexive_Setoid.
@@ -1221,14 +1221,14 @@ Proof.
 Qed.
 
 (** 下面再定义上确界计算函数与完备偏序集中的最小值。*)
-Instance oLub_while_fin {A B: Type}: OmegaLub (A -> B -> Prop) :=
+Local Instance oLub_while_fin {A B: Type}: OmegaLub (A -> B -> Prop) :=
   Sets.indexed_union.
 
-Instance Bot_while_fin {A B: Type}: Bot (A -> B -> Prop) :=
+Local Instance Bot_while_fin {A B: Type}: Bot (A -> B -> Prop) :=
   ∅: A -> B -> Prop.
 
 (** 下面证明这构成一个Omega完备偏序集。*)
-Instance oCPO_while_fin {A B: Type}:
+Local Instance oCPO_while_fin {A B: Type}:
   OmegaCompletePartialOrder_Setoid (A -> B -> Prop).
 Proof.
   split.
@@ -1252,7 +1252,7 @@ Qed.
 
 (** 额外需要补充一点：_[Equiv_while_fin]_确实是一个等价关系。先前Bourbaki-Witt不
     动点定理的证明中用到了这一前提。*)
-Instance Equiv_equiv_while_fin {A B: Type}:
+Local Instance Equiv_equiv_while_fin {A B: Type}:
   Equivalence (@equiv (A -> B -> Prop) _).
 Proof.
   apply Sets_equiv_equiv.
@@ -1262,11 +1262,11 @@ Qed.
 
 Ltac unfold_CPO_defs :=
   unfold order_rel, equiv, omega_lub, bot,
-         R_while_fin, Equiv_while_fin, oCPO_while_fin, Bot_while_fin.
+         R_while_fin, Equiv_while_fin, oLub_while_fin, Bot_while_fin.
 
 End StateRels_CPO.
 
-(** 事实上，我们可以在Coq中证明所有的幂集上的包含关系都是CPO。以下证明代码可以跳过。*)
+(** 事实上，我们可以在Coq中证明所有的密集上的包含关系都是CPO。以下证明代码可以跳过。*)
 
 Module Sets_CPO.
 Import BWFix.
@@ -1357,7 +1357,7 @@ Ltac unfold_CPO_defs :=
 End Sets_CPO.
 
 Module StateRels_Funcs.
-Import BWFix StateRels_CPO.
+Import BWFix Sets_CPO.
 
 
 (** 下面开始证明_[F(X) = (test_true(D0) ∘ D ∘ X) ∪ test_false(D0)]_这个函
@@ -1374,8 +1374,7 @@ Lemma BinRel_concat_left_mono:
     mono (fun X: B -> C -> Prop => Y ∘ X).
 Proof.
   intros.
-  unfold mono.
-  unfold order_rel, R_while_fin.
+  unfold mono. unfold_CPO_defs.
   intros.
   rewrite H; reflexivity.
 Qed.
@@ -1385,9 +1384,7 @@ Lemma BinRel_concat_left_continuous:
     continuous (fun X: B -> C -> Prop => Y ∘ X).
 Proof.
   intros.
-  unfold continuous.
-  unfold increasing, omega_lub, order_rel, equiv,
-         oLub_while_fin, R_while_fin, Equiv_while_fin.
+  unfold continuous, increasing; unfold_CPO_defs.
   intros.
   apply Rels_concat_indexed_union_distr_l.
 Qed.
@@ -1418,8 +1415,7 @@ Lemma union_right2_mono:
     mono (fun X => X ∪ Y).
 Proof.
   intros.
-  unfold mono.
-  unfold order_rel, R_while_fin.
+  unfold mono; unfold_CPO_defs.
   Sets_unfold.
   intros R R' H st1 st2.
   specialize (H st1 st2).
@@ -1431,9 +1427,7 @@ Lemma union_right2_continuous:
     continuous (fun X => X ∪ Y).
 Proof.
   intros.
-  unfold continuous.
-  unfold increasing, omega_lub, order_rel, equiv,
-         oLub_while_fin, R_while_fin, Equiv_while_fin.
+  unfold continuous, increasing; unfold_CPO_defs.
   Sets_unfold.
   intros l H st1 st2.
   split; intros.
@@ -1470,7 +1464,7 @@ Import Lang_SimpleWhile
        DntSem_SimpleWhile2
        DntSem_SimpleWhile3
        DntSem_SimpleWhile4
-       BWFix StateRels_CPO StateRels_Funcs.
+       BWFix Sets_CPO StateRels_Funcs.
 
 
 (** 最终我们可以用Bourbaki-Witt不动点定义while语句运行终止的情况。  
@@ -1503,13 +1497,12 @@ Proof.
   split.
   + apply (BW_LFix_is_fix (fun X => (test_true(D0) ∘ D ∘ X) ∪ test_false(D0)));
       tauto.
-  + intros X.
+  + intros.
     apply (BW_LFix_is_least_fix (fun X => (test_true(D0) ∘ D ∘ X) ∪ test_false(D0)));
       tauto.
 Qed.
 
 
 End DntSem_SimpleWhile5.
-
 
 
