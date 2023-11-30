@@ -12,10 +12,10 @@ Fact chickens_and_rabbits: forall C R: Z,
   C + R = 35 ->
   2 * C + 4 * R = 94 ->
   C = 23.
-
 (** 字面意思上，这个命题说的是：对于任意整数_[C]_与_[R]_，如果_[C + R = 35]_并且
     _[2 * C + 4 * R = 94]_，那么_[C = 23]_。其中，_[forall]_与_[->]_是Coq中描述数
     学命题的常用符号。  
+
 
     在Fact指令之后，我们可以在Coq中证明这个数学命题成立。如果要用中学数学知识完成这一
     证明，恐怕要使用加减消元法、代入消元法等代数技巧。Coq并不需要我们掌握这些数学技巧，
@@ -170,6 +170,7 @@ Proof. unfold plus_one. lia. Qed.
 Definition square (x: Z): Z := x * x.
 
 Example square_5: square 5 = 25.
+
 Proof. unfold square. lia. Qed.
 
 (** Coq中也可以定义多元函数。*)

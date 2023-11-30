@@ -38,7 +38,7 @@ Definition state: Type := var_name -> int64.
     除了修改程序状态的定义，还需要相应修改程序证整数类型表达式的语义。在Coq中，
     _[eval_expr_int e]_的类型就需要改为_[state -> int64]_。*)
 
-Definition add_sem (D1 D2: state -> int64) s: int64 :=
+Definition add_sem (D1 D2: state -> int64) (s: state): int64 :=
   Int64.add (D1 s) (D2 s).
 
 Definition sub_sem (D1 D2: state -> int64) s: int64 :=
@@ -153,6 +153,11 @@ Definition mul_sem (D1 D2: state -> option int64) (s: state): option int64 :=
   end.
 
 (** 最终，整数类型表达式的语义可以归结为下面递归定义。*)
+
+Check state.
+Inductive all_state: Type :=
+| Original_state (s: state)
+| type_state (s: state).
 
 Fixpoint eval_expr_int (e: expr_int): state -> option int64 :=
   match e with
