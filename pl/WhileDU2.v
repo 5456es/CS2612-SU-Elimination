@@ -7,6 +7,7 @@ Require Import SetsClass.SetsClass. Import SetsNotation.
 Require Import PL.SyntaxInCoq.
 Require Import compcert.lib.Integers.
 Require Import PL.PracticalDenotations.
+Require Import PL.DenotationalSemantics.
 Local Open Scope bool.
 Local Open Scope string.
 Local Open Scope Z.
@@ -28,8 +29,8 @@ Import Lang_WhileD.
 Import Lang_While.
 Inductive type : Type :=
   | TInt : type
-  | TBool : type
   | TIntPtr : type->type
+  | TBool : type
   | TStruct : struct_type_name->type
   | TUnion : union_type_name ->type
 with  struct_field : Type :=
@@ -203,60 +204,302 @@ End SU_Env.
 
 
 
-  Check empty_env.
-  Check add_struct_type "a" [StructField "b" TInt; StructField "c" TInt] empty_env.
-  Check add_union_type "a" [UnionCase "b" TInt None; UnionCase "c" TInt None] empty_env.
-  Compute add_struct_type "a" [StructField "b" TInt; StructField "c" TInt] empty_env.
-  Compute add_union_type "a" [UnionCase "b" TInt None; UnionCase "c" TInt None] empty_env.
-  Compute add_union_type "a" [UnionCase "b" TInt None; UnionCase "c" TInt None]
-  (add_union_type "x" [UnionCase "y" TBool None; UnionCase "z" TInt (Some (EConst 42))]
-     empty_env).
-  Compute add_struct_type "a" [StructField "b" TInt; StructField "c" TInt]
-     (add_union_type "x" [UnionCase "y" TBool None; UnionCase "z" TInt (Some (EConst 42))]
-        empty_env).
-
-
-(*
-Fixpoint lookup_field_type (field: var_name) (fields: list struct_field): option type :=
-  match fields with
-  | [] => None
-  | StructField x fieldType :: rest => if string_dec field x then Some fieldType else lookup_field_type field rest
-  end.
-
-
-Compute lookup_field_type "x" [StructField "x" TInt; StructField "y" TBool].
-
-Fixpoint lookup_union_case_type (case: var_name) (cases: list union_case): option type :=
-  match cases with
-  | [] => None
-  | UnionCase x fieldType _ :: rest => if string_dec case x then Some fieldType else lookup_union_case_type case rest
-  end.
-
-Compute lookup_union_case_type "x" [UnionCase "x" TInt None; UnionCase "y" TBool None].*)
-Check (TStruct "a").
-(*待续**)
-End SU_Env.
 
 Module WhileDU.
 
 Import Lang_WhileD.
 Import Lang_While.
 Import Type_defined.
-Import SU_Env.
+
+
+
+Record state: Type := {
+  env: var_name -> int64;
+  mem: int64 -> option val;
+}.
+
+Notation "s '.(env)'" := (env s) (at level 1).
+Notation "s '.(mem)'" := (mem s) (at level 1).
+
+Module EDenote.
+
+Record EDenote: Type := {
+  nrm: state -> int64 -> Prop;
+  err: state -> Prop;
+}.
+
+End EDenote.
+
+Import EDenote.
+
+Notation "x '.(nrm)'" := (EDenote.nrm x)
+  (at level 1, only printing).
+
+Notation "x '.(err)'" := (EDenote.err x)
+  (at level 1, only printing).
+
+Ltac any_nrm x := exact (EDenote.nrm x).
+
+Ltac any_err x := exact (EDenote.err x).
+
+Notation "x '.(nrm)'" := (ltac:(any_nrm x))
+  (at level 1, only parsing).
+
+Notation "x '.(err)'" := (ltac:(any_err x))
+  (at level 1, only parsing).
+
+
+  Definition arith_sem1_nrm
+  (Zfun: Z -> Z -> Z)
+  (D1 D2: state -> int64 -> Prop)
+  (s: state)
+  (i: int64): Prop :=
+exists i1 i2,
+D1 s i1 /\ D2 s i2 /\
+arith_compute1_nrm Zfun i1 i2 i.
+
+Definition arith_sem1_err
+  (Zfun: Z -> Z -> Z)
+  (D1 D2: state -> int64 -> Prop)
+  (s: state): Prop :=
+exists i1 i2,
+D1 s i1 /\ D2 s i2 /\
+arith_compute1_err Zfun i1 i2.
+
+Definition arith_sem1 Zfun (D1 D2: EDenote): EDenote :=
+{|
+nrm := arith_sem1_nrm Zfun D1.(nrm) D2.(nrm);
+err := D1.(err) ∪ D2.(err) ∪
+arith_sem1_err Zfun D1.(nrm) D2.(nrm);
+|}.
+
+
+
+Definition arith_sem2_nrm
+             (int64fun: int64 -> int64 -> int64)
+             (D1 D2: state -> int64 -> Prop)
+             (s: state)
+             (i: int64): Prop :=
+  exists i1 i2,
+    D1 s i1 /\ D2 s i2 /\
+    arith_compute2_nrm int64fun i1 i2 i.
+
+Definition arith_sem2_err
+             (D1 D2: state -> int64 -> Prop)
+             (s: state): Prop :=
+  exists i1 i2,
+    D1 s i1 /\ D2 s i2 /\
+    arith_compute2_err i1 i2.
+
+Definition arith_sem2 int64fun (D1 D2: EDenote): EDenote :=
+  {|
+    nrm := arith_sem2_nrm int64fun D1.(nrm) D2.(nrm);
+    err := D1.(err) ∪ D2.(err) ∪
+           arith_sem2_err D1.(nrm) D2.(nrm);
+  |}.
+
+  Definition cmp_sem_nrm
+  (c: comparison)
+  (D1 D2: state -> int64 -> Prop)
+  (s: state)
+  (i: int64): Prop :=
+exists i1 i2,
+D1 s i1 /\ D2 s i2 /\ cmp_compute_nrm c i1 i2 i.
+
+Definition cmp_sem c (D1 D2: EDenote): EDenote :=
+{|
+nrm := cmp_sem_nrm c D1.(nrm) D2.(nrm);
+err := D1.(err) ∪ D2.(err);
+|}.
+
+Definition neg_sem_nrm
+  (D1: state -> int64 -> Prop)
+  (s: state)
+  (i: int64): Prop :=
+exists i1, D1 s i1 /\ neg_compute_nrm i1 i.
+
+
+
+Definition neg_sem_err
+             (D1: state -> int64 -> Prop)
+             (s: state): Prop :=
+  exists i1, D1 s i1 /\ neg_compute_err i1.
+
+Definition neg_sem (D1: EDenote): EDenote :=
+  {|
+    nrm := neg_sem_nrm D1.(nrm);
+    err := D1.(err) ∪ neg_sem_err D1.(nrm);
+  |}.
+
+Definition not_sem_nrm
+             (D1: state -> int64 -> Prop)
+             (s: state)
+             (i: int64): Prop :=
+  exists i1, D1 s i1 /\ not_compute_nrm i1 i.
+
+Definition not_sem (D1: EDenote): EDenote :=
+  {|
+    nrm := not_sem_nrm D1.(nrm);
+    err := D1.(err);
+  |}.
+
+  Definition and_sem_nrm
+  (D1 D2: state -> int64 -> Prop)
+  (s: state)
+  (i: int64): Prop :=
+exists i1,
+D1 s i1 /\
+(SC_and_compute_nrm i1 i \/
+NonSC_and i1 /\
+exists i2,
+D2 s i2 /\ NonSC_compute_nrm i2 i).
+Definition and_sem_err
+             (D1: state -> int64 -> Prop)
+             (D2: state -> Prop)
+             (s: state): Prop :=
+  exists i1,
+    D1 s i1 /\ NonSC_and i1 /\ D2 s.
+
+Definition and_sem (D1 D2: EDenote): EDenote :=
+  {|
+    nrm := and_sem_nrm D1.(nrm) D2.(nrm);
+    err := D1.(err) ∪ and_sem_err D1.(nrm) D2.(err);
+  |}.
+
+  
+Definition or_sem_nrm
+(D1 D2: state -> int64 -> Prop)
+(s: state)
+(i: int64): Prop :=
+exists i1,
+D1 s i1 /\
+(SC_or_compute_nrm i1 i \/
+NonSC_or i1 /\
+exists i2,
+D2 s i2 /\ NonSC_compute_nrm i2 i).
+
+Definition or_sem_err
+(D1: state -> int64 -> Prop)
+(D2: state -> Prop)
+(s: state): Prop :=
+exists i1,
+D1 s i1 /\ NonSC_or i1 /\ D2 s.
+
+Definition or_sem (D1 D2: EDenote): EDenote :=
+{|
+nrm := or_sem_nrm D1.(nrm) D2.(nrm);
+err := D1.(err) ∪ or_sem_err D1.(nrm) D2.(err);
+|}.
+
+Definition unop_sem (op: unop) (D: EDenote): EDenote :=
+  match op with
+  | ONeg => neg_sem D
+  | ONot => not_sem D
+  end.
+
+Definition binop_sem (op: binop) (D1 D2: EDenote): EDenote :=
+  match op with
+  | OOr => or_sem D1 D2
+  | OAnd => and_sem D1 D2
+  | OLt => cmp_sem Clt D1 D2
+  | OLe => cmp_sem Cle D1 D2
+  | OGt => cmp_sem Cgt D1 D2
+  | OGe => cmp_sem Cge D1 D2
+  | OEq => cmp_sem Ceq D1 D2
+  | ONe => cmp_sem Cne D1 D2
+  | OPlus => arith_sem1 Z.add D1 D2
+  | OMinus => arith_sem1 Z.sub D1 D2
+  | OMul => arith_sem1 Z.mul D1 D2
+  | ODiv => arith_sem2 Int64.divs D1 D2
+  | OMod => arith_sem2 Int64.mods D1 D2
+  end.
+
+
+  Definition const_sem (n: Z): EDenote :=
+    {|
+      nrm := fun s i =>
+               i = Int64.repr n /\
+               Int64.min_signed <= n <= Int64.max_signed;
+      err := fun s =>
+               n < Int64.min_signed \/
+               n > Int64.max_signed;
+    |}.
+  
+(** 『解引用』表达式既可以用作右值也可以用作左值。其作为右值是的语义就是原先我们
+    定义的『解引用』语义。*)
+
+Definition deref_sem_nrm
+(D1: state -> int64 -> Prop)
+(s: state)
+(i: int64): Prop :=
+exists i1, D1 s i1 /\ s.(mem) i1 = Some (Vint i).
+
+Definition deref_sem_err
+(D1: state -> int64 -> Prop)
+(s: state): Prop :=
+exists i1,
+D1 s i1 /\
+(s.(mem) i1 = None \/ s.(mem) i1 = Some Vuninit).
+
+Definition deref_sem_r (D1: EDenote): EDenote :=
+{|
+nrm := deref_sem_nrm D1.(nrm);
+err := D1.(err) ∪ deref_sem_err D1.(nrm);
+|}.
+
+(** 当程序表达式为单个变量时，它也可以同时用作左值或右值。下面先定义其作为左值时
+的存储地址。*)
+
+Definition var_sem_l (X: var_name): EDenote :=
+{|
+nrm := fun s i => s.(env) X = i;
+err := ∅;
+|}.
+
+(** 基于此，可以又定义它作为右值时的值。*)
+
+Definition var_sem_r (X: var_name): EDenote :=
+deref_sem_r (var_sem_l X).
+
+
+
 
 Inductive expr : Type :=
-  | EConst (n: Z): expr
-  | EVar (x: var_name): expr
-  | EAdd (e1 e2: expr): expr
-  | ESub (e1 e2: expr): expr
-  | EMul (e1 e2: expr): expr
-  | EInt (e: expr): expr
-  | EPtrDeref (e: expr): expr
-  | EStructField (Struct: expr) (field: fieldname): expr
-  | EUnionCaseField (Union: expr) (case: union_case_name ): expr
-  | EStruct (structType: struct_type_name) (fields: list (fieldname * expr)): expr
-  | EUnion (unionType: union_type_name) (case: var_name) (e: expr): expr.
+| EConst (n: Z) : expr
+| EVar (x: var_name) : expr
+| EBinop (op: binop) (e1 e2: expr) : expr
+| EUnop (op: unop) (e: expr) : expr
+| EDeref (e: expr) : expr
+| EAddrOf (e: expr) : expr
+(*| ECast (e: expr) (t: type) : expr   Type casting *)
+| EStructMember (e: expr) (field: var_name) : expr  (* Access struct member *)
+| EUnionMember (e: expr) (field: var_name) : expr.  (* Access union member *)
 
+
+Fixpoint eval_r (e: expr): EDenote :=
+  match e with
+  | EConst n =>
+      const_sem n
+  | EVar X =>
+      var_sem_r X
+  | EBinop op e1 e2 =>
+      binop_sem op (eval_r e1) (eval_r e2)
+  | EUnop op e1 =>
+      unop_sem op (eval_r e1)
+  | EDeref e1 =>
+      deref_sem_r (eval_r e1)
+  | EAddrOf e1 =>
+      eval_l e1
+  end
+with eval_l (e: expr): EDenote :=
+  match e with
+  | EVar X =>
+      var_sem_l X
+  | EDeref e1 =>
+      eval_r e1
+  | _ =>
+      {| nrm := ∅; err := Sets.full; |}
+  end.
 
 Inductive com : Type :=
   | CSkip: com
