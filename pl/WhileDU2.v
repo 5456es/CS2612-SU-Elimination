@@ -23,10 +23,11 @@ Definition var_name := string.
 Definition fieldname := string.
 Definition union_case_name := string.
 Definition SU_type_name := string.
-
+Definition size := Z.
 Module Type_defined.
 Import Lang_WhileD.
 Import Lang_While.
+
 Inductive type : Type :=
   | TInt : type
   | TIntPtr : type->type
@@ -44,11 +45,7 @@ Module SU_Env.
 Import Lang_WhileD.
 Import Lang_While.
 Import Type_defined.
-
 Check (TStruct "a").
-
-
-
 Inductive struct_info : Type :=
   | StructDef : struct_type_name->list struct_field -> struct_info.
 
@@ -60,7 +57,7 @@ Inductive union_info : Type :=
   Definition var_table : Type := list (var_name * type).
 
   (* 定义结构或联合类型和其内部结构的表格 *)
-  Definition struct_union_table : Type := list (type * option struct_info * option union_info).
+  Definition struct_union_table : Type := list (type * option struct_info * option union_info ).
 
   (* 将类型环境定义为这两个表格的二元组 *)
   Definition type_env : Type := (var_table * struct_union_table).
@@ -82,10 +79,7 @@ Inductive union_info : Type :=
     | nil => None
     | (v, ty) :: rest => if string_dec v var then Some ty else lookup_var_type rest var
     end.
-
-
-
-
+  
     (*---------------------------Example------Start-------------------*)
   (* 查询变量类型的示例 *)
   Definition example_lookup1 : option type :=
@@ -141,6 +135,15 @@ Inductive union_info : Type :=
     | (ty, sinfo, _) :: rest => if string_dec (extract_struct_name ty) struct_name then sinfo else lookup_struct_info rest struct_name
     end.
 
+    Fixpoint check_sinfo (sinfo : option struct_info) : list struct_field :=
+      match sinfo with
+      | Some (StructDef _ fields) => fields
+      | None => nil
+      end.
+
+
+
+      (*---------------------------Example------Start-------------------*)
 
 
       (* 查询结构体字段类型的函数 *)
@@ -191,8 +194,6 @@ Compute example_query_struct_A.
     Compute example_query_z.
     Compute example_query_z_x.
     (*---------------------------Example-------End------------------*)
-
-
 
 Check type.
 End SU_Env.
@@ -512,7 +513,6 @@ Inductive com : Type :=
   | CWhile (e: expr) (c: com): com.
 
  
-
 
 
 

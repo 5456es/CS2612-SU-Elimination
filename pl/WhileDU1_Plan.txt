@@ -1,0 +1,168 @@
+
+题目：【已选】【语义理论】struct 与 union 消去的正确性证明
+考虑在 WhileD 语言中加入类型系统与单层非匿名的 struct 与 union 类型，称它为 WhileDU1。
+这里 struct 与 union 的域依然允许是 struct、union 或指针类型，但是由于没有嵌套定义，可
+以直接用 struct 与 union 的名称表示相关类型。请定义 WhileDU1 程序语言的指称语义；定
+义该语言与 While 语言之间的精化关系或语义等价关系；定义消除 struct 与 union 类型的变
+换，struct 与 union 类型的变量编译成为动态分配内存的指针变量，取域的值编译为取内存上
+的值；并证明这个变换的正确性。
+
+    要求 1：定义 WhileDU1 语言的指称语义，WhileD+malloc
+    语言的指称语义以及两者之间的精化关系（或语义等价），证明表达式与程序语句中对应的语
+    法结构都能保持这个精化关系（或语义等价）。
+
+    要求 2：证明表达式的变换服从这个精化关系
+    （或语义等价关系）。
+    
+    要求 3：证明程序语句的变换服从这个精化关系（或语义等价关系）。
+
+
+进度整理：
+    预期:
+        要求1：
+            1.1 定义WhileDU1语言的指称语义
+            1.2 定义WhileD+malloc语言的指称语义
+            1.3 定义两者之间的精化关系（或语义等价）
+            ###1.4 证明表达式与程序语句中对应的语法结构都能保持这个精化关系（或语义等价）
+        要求2：
+            2.1 证明表达式的变换服从这个精化关系（或语义等价关系）
+        要求3：
+            3.1 证明程序语句的变换服从这个精化关系（或语义等价关系）
+
+    实际：
+        要求1：
+            1.1 定义WhileDU1语言的指称语义
+                1.1.1 定义类型 （完成）
+                    1.1.1.1 Int ： type
+                    1.1.1.2 Pointer : type -> type
+                    1.1.1.3 Struct : struct_name -> type  （默认struct_name存储在环境中）
+                    1.1.1.4 Union : union_name -> type    （默认union_name存储在环境中）
+                    1.1.1.5 SU内部结构定义： MVar  (men_type : type) (var_name:  string) :  men_var
+                1.1.2 修改环境 （暂时完成）-
+                    --->12.5版本 （新增了s_i u_i type_size_properties）
+                    state:
+                        env: var_name -> int64;                          变量名 -> 内存地址
+                        mem: int64 ->  option val;                       内存地址 -> （读写权限）值
+                        
+                        *type_env: var_name -> type;                     变量名 -> 类型
+                        *struct_info : string -> list men_var;
+                        *union_info :  string->list men_var;
+                        *type_size : type -> Z;
+
+                        *type_size_properties：
+                            Tint 1 
+                            Tpointer 1
+                            TStruct  Fold_left + sum
+                            TUnion   Fold_left + max
+
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+                                12.5:
+                                    《《《*struct_union_info: string -> list men_var;      struct_name/union_name -> 内部结构》》》
+                                        
+                                        （这里需要分为struct union 其余）
+                                        满足性质
+                                        type_size 需要修改
+
+                                    ###  struct_info: string (代表struct名字)-> list men_var
+                                    ###  union_info: string (代表union名字) -> list men_var 
+
+                                    ### 需要一个满足的性质：struct_info和union_info里得到的list men_var,对应计算size需要和 type_size返回的 一致                          
+                                    ### type_size ???
+
+
+                                    ###
+                                        这里理解错了，这里直接写成一个函数好了
+
+                        *type_size: type -> Z;                           类型 -> 大小
+                        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+                1.1.3 修改表达式 （暂时完成）
+
+                        （ 所有的表达式都加入type
+                            
+                            pointermember要拆开
+
+                            允许嵌套struct和union取member
+                        ）
+
+                 ###    Inductive expr : Type :=
+                        | EVar （ty:type） (x: var_name) : expr                      --???可能修改???
+                        | EConst (n: Z) : expr                                   --不动
+                        | EBinop （ty:type）(op: binop) (e1 e2: expr) : expr        --不动
+                        | EUnop（ty:type） (op: unop) (e: expr) : expr              --不动
+                        | EDeref （ty:type）(e: expr) : expr                        --不动
+                        | EAddrOf （ty:type）(e: expr) : expr                       --不动
+                        | EStructMember (x:exprssion) (field: var_name) : expr  --(* Access struct member *) x.y
+                        | EUnionMember (x:exprssion) (field: var_name) : expr.  --(* Access union member *)  x.y
+                        | EPoniter_Struct_Member (x:exprssion) (field: var_name) : expr.  --(* Access Struct pointer member *) x->y
+                        | EPoniter_Union_Member (x:exprssion) (field: var_name) : expr.  --(* Access Union pointer member *) x->y###                                                                                                ###
+                     
+                《《《   Inductive expr : Type :=
+                        | EConst (n: Z) : expr                           --不动
+                        | EVar (x: var_name) : expr                      --???可能修改???
+                        | EBinop (op: binop) (e1 e2: expr) : expr        --不动
+                        | EUnop (op: unop) (e: expr) : expr              --不动
+                        | EDeref (e: expr) : expr                        --不动
+                        | EAddrOf (e: expr) : expr                       --不动
+                        | EStructMember (x:exprssion) (field: var_name) : expr  --(* Access struct member *) x.y
+                        | EUnionMember (x:var_name) (field: var_name) : expr.  --(* Access union member *)  x.y
+                        | EPoniterMember (x:var_name) (field: var_name) : expr.  --(* Access pointer member *) x->y 》》》
+
+
+
+
+
+
+                1.1.4 完善表达式 （正在进行）
+                    EStructMember (x:var_name) (field: var_name) : expr
+                            基于x的类型，通过s.type_env找到x的类型，然后通过s.struct_union_info找到x的内部结构，然后找到field的类型
+                            过程中采用size累加的方式找到field的偏移量，然后通过x的值找到x的内存地址，然后通过x的内存地址加上偏移量找到field的内存地址
+                            然后读值
+                        nrm:
+                             默认能x这个变量存在且得到地址 /\ 找得到x的struct类型 /\ fields里找得到field的偏移量 /\ x+offsetS是个【可读/Some】【初始化】的数值
+                        err:
+                              默认能x这个变量存在且得到地址  \/ 找不到x的struct类型 \/ fields里找不到field的偏移量 \/ x+offsetS不是个【可读/Some】【初始化】的数值
+
+                    EUnionMember (x:var_name) (field: var_name) : expr
+                            讲道理这个和Struct应该很像，但这里有个问题，那就是这里不需要偏移量，那么求值的时候如果不带入type的话，那么类型系统有什么意义呢？
+                            (换个思路)目前思路：把union理解成一个包容性强的数据结构，意思是说任何类型都可以在这里操作，只要这个类型被union包含，那么就可以操作
+                        nrm:
+                             默认能x这个变量存在且得到地址 /\ 找得到x的union类型 /\ fields里找到field的‘偏移量’(这里只要返回some offset说明找到了) /\ 地址是个【可读/Some】或者【初始化】的数值
+                        err:
+                              默认能x这个变量存在且得到地址  \/ 找不到x的union类型 \/ fields里找不到union的‘偏移量’ \/ 地址不是个（【可读/Some】并【初始化】）的数值
+
+                    EPoniterMember (x:var_name) (field: var_name) : expr
+                            草稿：这里的思路是，先找到x的类型，然后判断x的类型是不是pointer，如果是pointer，那么就找到pointer的类型；
+                                有了pointer的类型，我们就能知道这个pointer指向的类型是什么，如果是个struct或者union，那么就是有意义的，否则就是无意义的。
+                                到这里是不是就可以调用EStructMember或者EUnionMember了呢？
+                        
+                        nrm:
+                            默认能x这个变量存在且得到地址 /\ 找得到x的pointer类型 /\ pointer指向的类型是struct或者union /\ 
+                            x的值是个【可读/Some】并【初始化】的数值 /\ 通过x的值找到的地址是个【可读/Some】并【初始化】的数值
+                        err:
+                            默认能x这个变量存在且得到地址 \/ 找不到x的pointer类型 \/ pointer指向的类型不是struct或者union \/ 
+                            x的值不是个【可读/Some】并【初始化】的数值 \/ 通过x的值找到的地址不是个【可读/Some】并【初始化】的数值
+
+                    EVar:
+                        现在思考这样一个问题，那就是Struct和Union是不该出现在EVar中的，它是不该读取值的
+                        那么就加一层判断，如果是Struct或者Union，那么就err
+                        *这里我们认为所有变量都应该有个地址，那么这里的EVar就是找到这个变量的地址（var_sem_l），然后通过地址找到值（deref_sem_r）
+
+
+                        nrm:
+                            (fun s i => s.(type_env) X <> TStruct X /\ s.(type_env) X <> TUnion X) ∩ (deref_sem_r (var_sem_l X)).(nrm);
+                        err:
+                            (fun s  => s.(type_env) X = TStruct X \/ s.(type_env) X = TUnion X) ∪ (deref_sem_r (var_sem_l X)).(err);
+
+
+
+
+
+12.5
+    1. 要求的明确？
+    2. 语句预测：
+        新增声明：接受type和变量名，修改环境
+        修改赋值：赋值的时候需要判断类型是否匹配，如果不匹配，那么就err
+            一般认为SU类型不可以被赋值，不然这里=的意义就不明确了
+    3. malloc 是怎么处理？
+    4.offset，成员变量是不是能直接用函数处理

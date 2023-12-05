@@ -1704,6 +1704,10 @@ Definition asgn_deref_sem_nrm
     (forall X, s1.(vars) X = s2.(vars) X) /\
     (forall p, i1 <> p -> s1.(mem) p = s2.(mem) p).
 
+
+
+
+
 Definition asgn_deref_sem_err
              (D1: state -> int64 -> Prop)
              (s1: state): Prop :=
@@ -2185,7 +2189,11 @@ Definition while_sem
 
 (** 向地址赋值的语义与原先定义基本相同，只是现在需要规定所有变量的地址不被改变，
     而非所有变量的值不被改变。*)
-
+    Record CDenote: Type := {
+    nrm: state -> state -> Prop;
+    err: state -> Prop;
+    inf: state -> Prop
+  }.
 Definition asgn_deref_sem_nrm
              (D1 D2: state -> int64 -> Prop)
              (s1 s2: state): Prop :=
@@ -2212,6 +2220,34 @@ Definition asgn_deref_sem
            asgn_deref_sem_err D2.(nrm);
     inf := ∅;
   |}.
+
+  x.y ???
+
+  state.
+
+  del 
+  (varname var_type)
+  (s1 s2:state)
+          size_env: type->int64
+          type_env:varname->type
+          env:var_name->int64
+          mem:int64->option val 
+
+  exists 未使用地址 forall X  s1.(env) X <> 未使用地址
+  forall name, name=var_name-> s2.(type_env) name = var_type + 其余不变
+
+  forall name, name=var_name-> s2.(env) name = ?未使用地址?  + 其余不变
+  forall addr, name=未使用地址-> s2.(mem) 未使用地址 = （Some Vuninit）  +其余不变
+
+
+  A的地址+计算所得偏移量
+
+struct A{
+  int x;
+  type?? B; (B->type - -》size  )
+  int y;
+  int z;
+}  A 没有value
 
 (** 变量赋值的行为可以基于此定义。*)
 
