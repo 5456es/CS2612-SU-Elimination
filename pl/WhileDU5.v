@@ -37,7 +37,7 @@ with men_var : Type :=
 Inductive expr : Type :=
 | EConst (n: Z) (ty : type) : expr
 | EVar (x: var_name) (ty:type): expr
-| EBinop (op: binop) (e1 e2: expr)(ty1 ty2:type) : expr
+| EBinop (op: binop) (e1 e2: expr)(ty:type) : expr
 | EUnop (op: unop) (e: expr)(ty:type) : expr
 | EDeref (e: expr)(ty:type) : expr
 | EAddrOf (e: expr) (ty:type): expr
@@ -105,6 +105,17 @@ Notation "x '.(err)'" := (ltac:(any_err x))
   (at level 1, only parsing).
 
 
+Definition NotStructOrUnion (ty1 ty2:type)(s: state)
+(i: int64): Prop := 
+            forall su , ty1 <> TStruct su /\  
+                        ty1 <> TUnion su /\ 
+                        ty2 <> TStruct su /\ 
+                        ty2 <> TUnion su.
+
+
+
+
+
   Definition arith_sem1_nrm
   (Zfun: Z -> Z -> Z)
   (D1 D2: state -> int64 -> Prop)
@@ -124,7 +135,7 @@ arith_compute1_err Zfun i1 i2.
 
 Definition arith_sem1 Zfun (D1 D2: EDenote): EDenote :=
 {|
-nrm := arith_sem1_nrm Zfun D1.(nrm) D2.(nrm);
+nrm := arith_sem1_nrm Zfun D1.(nrm) D2.(nrm)    ;
 err := D1.(err) ∪ D2.(err) ∪
 arith_sem1_err Zfun D1.(nrm) D2.(nrm);
 |}.
@@ -241,19 +252,19 @@ Definition or_sem_err
 exists i1,
 D1 s i1 /\ NonSC_or i1 /\ D2 s.
 
-Definition or_sem (D1 D2: EDenote): EDenote :=
+Definition or_sem (D1 D2: EDenote) : EDenote :=
 {|
-nrm := or_sem_nrm D1.(nrm) D2.(nrm);
+nrm := or_sem_nrm D1.(nrm) D2.(nrm) ;
 err := D1.(err) ∪ or_sem_err D1.(nrm) D2.(err);
 |}.
 
 Definition unop_sem (op: unop) (D: EDenote): EDenote :=
   match op with
-  | ONeg => neg_sem D
+  | ONeg =>  D
   | ONot => not_sem D
   end.
 
-Definition binop_sem (op: binop) (D1 D2: EDenote) (ty:type): EDenote :=
+Definition binop_sem (op: binop) (D1 D2: EDenote) : EDenote :=
   match op with
   | OOr => or_sem D1 D2
   | OAnd => and_sem D1 D2
@@ -263,22 +274,22 @@ Definition binop_sem (op: binop) (D1 D2: EDenote) (ty:type): EDenote :=
   | OGe => cmp_sem Cge D1 D2
   | OEq => cmp_sem Ceq D1 D2
   | ONe => cmp_sem Cne D1 D2
-  | OPlus => arith_sem1 Z.add D1 D2
-  | OMinus => arith_sem1 Z.sub D1 D2
-  | OMul => arith_sem1 Z.mul D1 D2
+  | OPlus => arith_sem1 Z.add D1 D2 
+  | OMinus => arith_sem1 Z.sub D1 D2 
+  | OMul => arith_sem1 Z.mul D1 D2 
   | ODiv => arith_sem2 Int64.divs D1 D2
   | OMod => arith_sem2 Int64.mods D1 D2
   end.
 
 
-  Definition const_sem (n: Z)(ty:type): EDenote :=
+  Definition const_sem (n: Z): EDenote :=
     {|
       nrm := fun s i =>
                i = Int64.repr n /\
-               Int64.min_signed <= n <= Int64.max_signed /\ ty = TInt;
+               Int64.min_signed <= n <= Int64.max_signed ;
       err := fun s =>
                n < Int64.min_signed \/
-               n > Int64.max_signed \/ ty <> TInt;
+               n > Int64.max_signed ;
     |}.
   
 (** 『解引用』表达式既可以用作右值也可以用作左值。其作为右值是的语义就是原先我们
@@ -478,29 +489,54 @@ Definition EPoniterMember_sem (x:var_name) (field: var_name): EDenote :=
 
 (*
 Inductive expr : Type :=
-| EConst (n: Z) : expr
-| EVar (x: var_name) : expr
-| EBinop (op: binop) (e1 e2: expr) : expr
-| EUnop (op: unop) (e: expr) : expr
-| EDeref (e: expr) : expr
-| EAddrOf (e: expr) : expr
-| EStructMember (x:var_name) (field: var_name) : expr  (* Access struct member *)
-| EUnionMember (x:var_name) (field: var_name) : expr.  (* Access union member *)
+| EConst (n: Z) (ty : type) : expr
+| EVar (x: var_name) (ty:type): expr
+| EBinop (op: binop) (e1 e2: expr)(ty :type) : expr
+| EUnop (op: unop) (e: expr)(ty:type) : expr
+| EDeref (e: expr) (ty:type) : expr
+| EAddrOf (e: expr) (ty:type): expr
+(*| ECast (e: expr) (t: type) : expr   Type casting *)
+| EStructMember (x:expr) (field: var_name) (ty:type): expr  (* Access struct member *)
+| EUnionMember (x:expr) (field: var_name)(ty:type) : expr  (* Access union member *)
+| EPoniter_Struct_Member (x:expr) (field: var_name) (ty:type) : expr  (* Access poniter member *)
+| EPoniter_Union_Member (x:expr) (field: var_name) (ty:type) : expr  (* Access poniter member *).
 *)
+
+
+
+
+
+
+
 
 
 
 Fixpoint eval_r (e: expr): EDenote :=
   match e with
   | EConst n ty =>
-      const_sem n 
+      match ty with
+      | TInt => const_sem n
+      | _ => False_sem
+      end
   | EVar X ty =>
-      var_sem_r X
+      match ty with
+      | TInt => var_sem_r X
+      | TPointer _ => var_sem_r X
+      | _ => False_sem
+      end
   | EBinop op e1 e2  ty=>
-    binop_sem op (eval_r e1) (eval_r e2) ty
+      match ty with
+      | TStruct _ => False_sem
+      | TUnion _ => False_sem
+      | _ => binop_sem op (eval_r e1) (eval_r e2) 
+      end
   | EUnop op e1  ty=>
-      unop_sem op (eval_r e1)
-  | EDeref  e1 ty=>
+      match ty with
+      | TInt => unop_sem op (eval_r e1)
+      | TPointer _ => unop_sem op (eval_r e1)
+      | _ => False_sem
+        end
+  | EDeref e1 ty=>
       deref_sem_r (eval_r e1)
   | EAddrOf e1 ty=>
       eval_l e1
