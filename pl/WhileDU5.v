@@ -2,6 +2,7 @@
 
 Require Import Coq.Strings.String.
 Require Import Coq.ZArith.ZArith.
+
 Require Import Coq.micromega.Psatz.
 Local Open Scope string.
 Local Open Scope Z.
@@ -112,7 +113,8 @@ Definition NotStructOrUnion (ty1 ty2:type)(s: state)
                         ty2 <> TStruct su /\ 
                         ty2 <> TUnion su.
 
-
+Definition type_equal (ty1 ty2: type): Prop := 
+  ty1 = ty2.
 
 
 
@@ -281,8 +283,8 @@ Definition binop_sem (op: binop) (D1 D2: EDenote) : EDenote :=
   | OMod => arith_sem2 Int64.mods D1 D2
   end.
 
-
-  Definition const_sem (n: Z): EDenote :=
+(*这里认为常数指针和值在处理上是一样的，在使用时会因为type不同产生区别*)
+  Definition const_sem (n: Z) : EDenote :=
     {|
       nrm := fun s i =>
                i = Int64.repr n /\
@@ -393,12 +395,22 @@ Definition struct_member_sem_nrm (x: string) (field: string) (s: state) (i: int6
       end
     | _ => True
     end.
-
 Definition struct_menber_sem (x: string) (field: string): EDenote :=
 {|
   nrm := struct_member_sem_nrm x field;
   err := struct_member_sem_err x field;
 |}.
+
+(*
+Definition struct_menber_sem (x: expr) (field: string): EDenote :=
+{|
+  nrm := match x with
+          | EStructMember x' field' ty=> struct_menber_sem x' field'
+          | EUnionMember x' field' => union_menber_sem x' field'
+          | EVar 
+  err := struct_member_sem_err x field;
+|}.
+*)
 
 Definition union_member_sem_nrm (x: string) (case: string) (s: state) (i: int64): Prop :=
   match s.(type_env) x with
@@ -510,7 +522,20 @@ Inductive expr : Type :=
 
 
 
-
+  (*感觉表达式加入类型作为参数在语法上显得有些奇怪，但是暂时没有什么更好的思路
+Inductive expr : Type :=
+| EConst (n: Z) (ty : type) : expr
+| EVar (x: var_name) (ty:type): expr
+| EBinop (op: binop) (e1 e2: expr)(ty:type) : expr
+| EUnop (op: unop) (e: expr)(ty:type) : expr
+| EDeref (e: expr)(ty:type) : expr
+| EAddrOf (e: expr) (ty:type): expr
+(*| ECast (e: expr) (t: type) : expr   Type casting *)
+| EStructMember (x:expr) (field: var_name) (ty:type): expr  (* Access struct member *)
+| EUnionMember (x:expr) (field: var_name)(ty:type) : expr  (* Access union member *)
+| EPoniter_Struct_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *)
+| EPoniter_Union_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *).
+*)
 Fixpoint eval_r (e: expr): EDenote :=
   match e with
   | EConst n ty =>
@@ -524,32 +549,99 @@ Fixpoint eval_r (e: expr): EDenote :=
       | TPointer _ => var_sem_r X
       | _ => False_sem
       end
-  | EBinop op e1 e2  ty=>
+  | EBinop op e1 e2 ty=>(*采用了非常丑陋的方法来判断类型是否符合，即将可能产生SU类型的表达式区分开来，不知道需要实现的类型检查是不是这样*)
       match ty with
       | TStruct _ => False_sem
       | TUnion _ => False_sem
-      | _ => binop_sem op (eval_r e1) (eval_r e2) 
+      | _ => 
+        match e1 with
+        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' => 
+          match ty' with
+          | TStruct _ => False_sem
+          | TUnion _ => False_sem
+          | _ => 
+            match e2 with 
+            | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' => 
+              match ty' with
+              | TStruct _ => False_sem
+              | TUnion _ => False_sem
+              | _ => binop_sem op (eval_r e1) (eval_r e2) 
+              end
+            | _ => binop_sem op (eval_r e1) (eval_r e2) 
+            end
+          end
+        | _ => match e2 with 
+            | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' => 
+              match ty' with
+              | TStruct _ => False_sem
+              | TUnion _ => False_sem
+              | _ => binop_sem op (eval_r e1) (eval_r e2) 
+              end
+            | _ => binop_sem op (eval_r e1) (eval_r e2) 
+            end
+        end
       end
-  | EUnop op e1  ty=>
+  | EUnop op e1 ty=>
       match ty with
       | TInt => unop_sem op (eval_r e1)
       | TPointer _ => unop_sem op (eval_r e1)
-      | _ => False_sem
+      | _ => 
+        match e1 with
+        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' =>
+          match ty' with
+          | TStruct _ => False_sem
+          | TUnion _ => False_sem
+          | _ => unop_sem op (eval_r e1)
+          end
+        | _ => unop_sem op (eval_r e1)
         end
+      end
   | EDeref e1 ty=>
-      deref_sem_r (eval_r e1)
+      match ty with
+      | TStruct _ => False_sem
+      | TUnion _ => False_sem
+      | _ => 
+        match e1 with
+        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' =>
+          match ty' with
+          | TStruct _ => False_sem
+          | TUnion _ => False_sem
+          | _ => deref_sem_r (eval_r e1)
+          end
+        | _ => deref_sem_r (eval_r e1)
+        end
+      end
   | EAddrOf e1 ty=>
-      eval_l e1
-  | EStructMember x field ty => (*x.y*)
-      struct_menber_sem x field
+      match ty with
+      | TStruct _ => False_sem
+      | TUnion _ => False_sem
+      | _ => 
+        match e1 with
+        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' =>
+          match ty' with
+          | TStruct _ => False_sem
+          | TUnion _ => False_sem
+          | _ => eval_l e1
+          end
+        | _ => eval_l e1
+        end
+      end
+  | EStructMember x field ty => (*这里试图解决struct的嵌套问题但是失败了，最后一步缺少能够由expr得到string的方法x.y*)
+      match x with
+      | EStructMember x' field' ty => EStructMember x' field' ty
+      | EUnionMember x' field' ty => EUnionMember x' field' ty
+      | EPoniter_Struct_Member x' field' ty => EPoniter_Struct_Member x' field' ty
+      | EPoniter_Union_Member x' field' ty => EPoniter_Union_Member x' field' ty
+      | _ => struct_menber_sem x field
+      end
   | EUnionMember x field ty=>
       union_menber_sem x field
-  |EPoniter_Struct_Member   x field ty=>
-      union_menber_sem x field
+  |EPoniter_Struct_Member x field ty=>
+      struct_menber_sem x field
   | EPoniter_Union_Member x field ty=>
       union_menber_sem x field
-  end   
-with eval_l (e: expr): EDenote :=
+  end
+  with eval_l (e: expr): EDenote :=
   match e with
   | EVar X =>
       var_sem_l X
@@ -558,10 +650,6 @@ with eval_l (e: expr): EDenote :=
   | _ =>
       {| nrm := ∅; err := Sets.full; |}
   end.
-
-
-
-
 
   
 1.union?怎么看
