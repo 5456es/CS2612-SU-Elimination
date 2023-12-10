@@ -303,6 +303,8 @@ Definition deref_sem_nrm
 (i: int64): Prop :=
 exists i1, D1 s i1 /\ s.(mem)  i1 = Some (Vint i).
 
+(*这里的i1是地址*)
+
 Definition deref_sem_err
 (D1: state -> int64 -> Prop)
 (s: state): Prop :=
@@ -329,40 +331,29 @@ err := ∅;
 
 (** 基于此，可以又定义它作为右值时的值。*)
 
-Definition False_sem: EDenote :=
-{|
-nrm := ∅;
-err := Sets.full;
-|}.
 
 
-
-Definition var_sem_r (X: var_name) : EDenote :=
+Definition var_sem_r (X: var_name) (ty : type) : EDenote :=
   {|
-    nrm := (fun s i => forall su , s.(type_env) X <> TStruct su /\ s.(type_env) X <> TUnion su) ∩ (deref_sem_r (var_sem_l X)).(nrm);
-    err := (fun s  => forall su ,s.(type_env) X = TStruct su \/ s.(type_env) X = TUnion su) ∪ (deref_sem_r (var_sem_l X)).(err);
+    nrm := (fun s i => s.(type_env) X = ty) ∩ (deref_sem_r (var_sem_l X)).(nrm);
+    err := (fun s  => s.(type_env) X <> ty) ∪ (deref_sem_r (var_sem_l X)).(err);
   |}.
 
 
+  (**此处，定义一个False的语句**)
+
+  Definition False_sem: EDenote :=
+    {|
+    nrm := ∅;
+    err := Sets.full;
+    |}.
+    
+    
 
 
 
 
-(* 辅助函数：计算结构体中字段的偏移量 *)
-Fixpoint calculate_offset (s:state) (field: string) (fields: list men_var) (offset: Z) : option Z :=
-  match fields with
-  | [] => None (* 未找到字段，返回 None *)
-  | MVar ty f :: rest =>
-    if string_dec f field
-    then Some offset (* 找到字段，返回当前偏移量 *)
-    else calculate_offset s field rest (offset + s.(type_size) ty ) (* 继续查找下一个字段 *)
-  end.
-
-
-(* 辅助函数：查找结构体中字段的偏移量 *)
-Definition find_field_offset (s : state) (field: string) (struct_fields: list men_var) : option Z :=
-  calculate_offset s field struct_fields (0).
-
+(*
 (* 主要函数：结构体成员的正常状态 *)
 Definition struct_member_sem_nrm (x: string) (field: string) (s: state) (i: int64): Prop :=
   match s.(type_env) x with
@@ -395,7 +386,7 @@ Definition struct_member_sem_nrm (x: string) (field: string) (s: state) (i: int6
       end
     | _ => True
     end.
-Definition struct_menber_sem (x: string) (field: string): EDenote :=
+Definition struct_menber_sem (x: string) (field: string) (ty:type): EDenote :=
 {|
   nrm := struct_member_sem_nrm x field;
   err := struct_member_sem_err x field;
@@ -408,7 +399,7 @@ Definition struct_menber_sem (x: expr) (field: string): EDenote :=
           | EStructMember x' field' ty=> struct_menber_sem x' field'
           | EUnionMember x' field' => union_menber_sem x' field'
           | EVar 
-  err := struct_member_sem_err x field;
+4477  err := struct_member_sem_err x field;
 |}.
 *)
 
@@ -494,35 +485,113 @@ Definition EPoniterMember_sem (x:var_name) (field: var_name): EDenote :=
   nrm := EPoniterMember_sem_nrm x field;
   err := EPoniterMember_sem_err x field;
 |}.
-
-
-
-
-
-(*
-Inductive expr : Type :=
-| EConst (n: Z) (ty : type) : expr
-| EVar (x: var_name) (ty:type): expr
-| EBinop (op: binop) (e1 e2: expr)(ty :type) : expr
-| EUnop (op: unop) (e: expr)(ty:type) : expr
-| EDeref (e: expr) (ty:type) : expr
-| EAddrOf (e: expr) (ty:type): expr
-(*| ECast (e: expr) (t: type) : expr   Type casting *)
-| EStructMember (x:expr) (field: var_name) (ty:type): expr  (* Access struct member *)
-| EUnionMember (x:expr) (field: var_name)(ty:type) : expr  (* Access union member *)
-| EPoniter_Struct_Member (x:expr) (field: var_name) (ty:type) : expr  (* Access poniter member *)
-| EPoniter_Union_Member (x:expr) (field: var_name) (ty:type) : expr  (* Access poniter member *).
 *)
 
+(*辅助函数：查找结构体中某个字段的类型*)
+Fixpoint calculate_type (s:state) (field:string)(fields:list men_var) : option type := 
+  match fields with
+  | [] => None
+  | MVar ty f :: rest =>
+    if string_dec f field
+    then Some ty
+    else calculate_type s field rest
+  end.
 
 
 
+(* 辅助函数：计算结构体中字段的偏移量 *)
+Fixpoint calculate_offset (s:state) (field: string) (fields: list men_var) (offset: Z) : option Z :=
+  match fields with
+  | [] => None (* 未找到字段，返回 None *)
+  | MVar ty f :: rest =>
+    if string_dec f field
+    then Some offset (* 找到字段，返回当前偏移量 *)
+    else calculate_offset s field rest (offset + s.(type_size) ty ) (* 继续查找下一个字段 *)
+  end.
+
+(* 辅助函数：查找结构体中字段的偏移量 *)
+Definition find_field_offset (s : state) (field: string) (struct_fields: list men_var) : option Z :=
+  calculate_offset s field struct_fields (0).
+
+  (* x.y的处理：
+      这个函数接受x的左值 对应struct_type 内部字段 
+      返回这个字段的左值，也就是对应地址
+      *)
+Definition EStructMember_sem_l (D1: EDenote) (struct_type: string) (field: string) (ty:type) : EDenote :=
+  {|
+    nrm := (fun s i => exists i' , (D1.(nrm) s i' )/\ (
+                                  match find_field_offset s field (s.(struct_info) struct_type) with
+                                  (*查一下这个字段field在D1对应的struct Type里的偏移量*)
+                                  | Some offset => i = Int64.add i' (Int64.repr offset)
+                                  | None => False
+                                  end) /\ calculate_type s field (s.(struct_info) struct_type) = Some ty
+                                   );
+    err := D1.(err) ∪ (fun s => exists i', (D1.(nrm) s i') /\ 
+                                  (
+                                  match find_field_offset s field (s.(struct_info) struct_type) with
+                                  | Some offset => False
+                                  | None => True
+                                    end 
+                                 
+                                  )
+                      );
+  |}. 
+
+  Definition EUnionMember_sem_l (D1: EDenote) (union_type: string) (field: string) (ty:type): EDenote :=
+    {|
+      nrm := (fun s i => exists i' , (D1.(nrm) s i' )/\ (
+                                    match find_field_offset s field (s.(union_info) union_type) with
+                                    (*查一下这个字段field在D1对应的union Type里的"偏移"量*)
+                                    | Some offset => i =  i' 
+                                    | None => False
+                                    end) /\ calculate_type s field (s.(union_info) union_type) = Some ty
+                                    );
+      err := D1.(err) ∪ (fun s => exists i', (D1.(nrm) s i') /\ (
+                                    match find_field_offset s field ( (s.(union_info) union_type)) with
+                                    | Some offset => False
+                                    | None => True
+                                    end ));
+    |}. 
+  
+
+
+(*StructMember_sem_r*)
+
+Definition struct_member_sem_r (x:EDenote) (struct_type: string)(field:string)(ty:type): EDenote :=
+{|
+  nrm :=  fun s i => exists i', (x.(nrm) s i') /\ (
+                                                match find_field_offset s field (s.(struct_info) struct_type) with
+                                                (*查一下这个字段field在x对应的struct Type里的偏移量*)
+                                                None => False
+                                                | Some offset => s.(mem) (Int64.add i' (Int64.repr offset)) = Some (Vint i)
+                                                end  /\ calculate_type s field (s.(struct_info) struct_type) = Some ty);
+  err := x.(err) ∪ (fun s => exists i', (x.(nrm) s i') /\ (
+                                                match find_field_offset s field (s.(struct_info) struct_type) with
+                                                | None => True
+                                                | Some offset => s.(mem) (Int64.add i' (Int64.repr offset)) = None \/ s.(mem) (Int64.add i' (Int64.repr offset)) = Some (Vuninit)
+                                                end ));
+|}.
+
+Definition union_member_sem_r (x:EDenote) (union_type: string)(field:string)(ty:type): EDenote :=
+{|
+  nrm :=  fun s i => exists i', (x.(nrm) s i') /\ (
+                                                match find_field_offset s field (s.(union_info) union_type) with
+                                                (*查一下这个字段field在x对应的union Type里的"偏移"量*)
+                                                None => False
+                                                | Some offset => s.(mem) i' = Some (Vint i)
+                                                end  /\ calculate_type s field (s.(union_info) union_type) = Some ty);
+  err := x.(err) ∪ (fun s => exists i', (x.(nrm) s i') /\ (
+                                                match find_field_offset s field (s.(union_info) union_type) with
+                                                | None => True
+                                                | Some offset => s.(mem) i' = None \/ s.(mem) i' = Some (Vuninit)
+                                                end ));
+
+
+|}.
 
 
 
-
-
-  (*感觉表达式加入类型作为参数在语法上显得有些奇怪，但是暂时没有什么更好的思路
+(*感觉表达式加入类型作为参数在语法上显得有些奇怪，但是暂时没有什么更好的思路
 Inductive expr : Type :=
 | EConst (n: Z) (ty : type) : expr
 | EVar (x: var_name) (ty:type): expr
@@ -536,6 +605,23 @@ Inductive expr : Type :=
 | EPoniter_Struct_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *)
 | EPoniter_Union_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *).
 *)
+
+Definition expr_type_extract (e:expr): type :=
+  match e with
+  | EConst n ty => ty
+  | EVar x ty => ty
+  | EBinop op e1 e2 ty => ty
+  | EUnop op e ty => ty
+  | EDeref e ty => ty
+  | EAddrOf e ty => ty
+  | EStructMember x field ty => ty
+  | EUnionMember x field ty => ty
+  | EPoniter_Struct_Member x field ty => ty
+  | EPoniter_Union_Member x field ty => ty
+  end.
+
+
+
 Fixpoint eval_r (e: expr): EDenote :=
   match e with
   | EConst n ty =>
@@ -543,120 +629,389 @@ Fixpoint eval_r (e: expr): EDenote :=
       | TInt => const_sem n
       | _ => False_sem
       end
+    
   | EVar X ty =>
       match ty with
-      | TInt => var_sem_r X
-      | TPointer _ => var_sem_r X
+      | TInt => var_sem_r X ty
+      | TPointer _ => var_sem_r X ty
       | _ => False_sem
       end
-  | EBinop op e1 e2 ty=>(*采用了非常丑陋的方法来判断类型是否符合，即将可能产生SU类型的表达式区分开来，不知道需要实现的类型检查是不是这样*)
-      match ty with
-      | TStruct _ => False_sem
-      | TUnion _ => False_sem
-      | _ => 
-        match e1 with
-        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' => 
-          match ty' with
+      (*基于区分左右值的思路，右值只能是TInt 或者 TPointer*)
+
+  | EBinop op e1 e2 ty=>
+    (*此处我们认为只有TInt 和 TPointer 可以进行二元运算*)
+      match expr_type_extract e1 as t1 with
+        | TStruct _ => False_sem
+        | TUnion _ => False_sem
+        | TInt => 
+          match expr_type_extract e2 with
           | TStruct _ => False_sem
           | TUnion _ => False_sem
-          | _ => 
-            match e2 with 
-            | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' => 
-              match ty' with
-              | TStruct _ => False_sem
-              | TUnion _ => False_sem
-              | _ => binop_sem op (eval_r e1) (eval_r e2) 
-              end
-            | _ => binop_sem op (eval_r e1) (eval_r e2) 
+          | TInt =>
+            match ty with
+            | TInt => binop_sem op (eval_r e1) (eval_r e2)
+            | _ => False_sem
+            end
+          | TPointer _ =>
+            match ty with
+            | TInt => binop_sem op (eval_r e1) (eval_r e2)
+            | _ => False_sem
             end
           end
-        | _ => match e2 with 
-            | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' => 
-              match ty' with
-              | TStruct _ => False_sem
-              | TUnion _ => False_sem
-              | _ => binop_sem op (eval_r e1) (eval_r e2) 
-              end
-            | _ => binop_sem op (eval_r e1) (eval_r e2) 
+        | TPointer pointer_type => 
+          match expr_type_extract e2 with
+          | TStruct _ => False_sem
+          | TUnion _ => False_sem
+          | TInt =>
+            match ty with
+            | TInt => binop_sem op (eval_r e1) (eval_r e2)
+            | _ => False_sem
             end
+          | TPointer pointer_type =>
+            match ty with
+            | TPointer pointer_type => binop_sem op (eval_r e1) (eval_r e2)
+              (*这里值得注意的是，遇到了俩pointer，那么必须一致指向类型*)
+            | _ => False_sem
+          end
         end
-      end
+      end 
   | EUnop op e1 ty=>
-      match ty with
+      match expr_type_extract e1 as t1 with
+      | TStruct _ => False_sem
+      | TUnion _ => False_sem
+      (*老样子，右值不允许SU*)
       | TInt => unop_sem op (eval_r e1)
       | TPointer _ => unop_sem op (eval_r e1)
-      | _ => 
-        match e1 with
-        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' =>
-          match ty' with
-          | TStruct _ => False_sem
-          | TUnion _ => False_sem
-          | _ => unop_sem op (eval_r e1)
-          end
-        | _ => unop_sem op (eval_r e1)
-        end
       end
+
   | EDeref e1 ty=>
-      match ty with
-      | TStruct _ => False_sem
-      | TUnion _ => False_sem
-      | _ => 
-        match e1 with
-        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' =>
-          match ty' with
-          | TStruct _ => False_sem
-          | TUnion _ => False_sem
-          | _ => deref_sem_r (eval_r e1)
-          end
-        | _ => deref_sem_r (eval_r e1)
-        end
+      match expr_type_extract e1  with
+      | TPointer pointer_type => 
+            match pointer_type with
+            | ty => deref_sem_r  (eval_r e1)
+            end
+      | _ => False_sem
       end
+    
+      (*eval_r e1 返回了什么？返回了的是一个Edenote ， 是 state->int64， 是返回了int64，那么你随便解析吧*)
+
   | EAddrOf e1 ty=>
+      eval_l e1
+      
+      (*这里后面会判断，是个Var，那没关系，我们总是能通过state.env 找到这个变量的位置
+        是个Dref？也没关系，反向回去好了。
+      *)
+
+
+
+  | EStructMember x field ty => 
+    match ty with
+    | TStruct _ => False_sem
+    | TUnion _ => False_sem 
+    | _ => 
+      match expr_type_extract x with
+      | TStruct struct_type =>   struct_member_sem_r (eval_l x) struct_type field ty
+      | _ => False_sem
+      end
+    end
+      (*如果出现嵌套，那么这个表达式应该需要一个地址*)
+
+
+  (* ---弃案---
+    让我们思考一下
+      x.y
+        x是个什么？是个expr!
+        这个expression的类型是什么？是个struct！
+        我们想想，什么东西能确认是这玩意儿？
+        看看所有的expr，有哪些能够确认是struct的？
+          1. EStructMember x field ty
+          2. EUnionMember x field ty
+          3. EPoniter_Struct_Member x field ty
+          4. EPoniter_Union_Member x field ty
+          5. EVar x ty
+          6. EDeref x ty ？？？？？？？ 这玩意儿可以吗？？？？？？？？
+            我觉得不行，因为这个东西的检验：【是个int64】所以不行
+
+
+      类型确认后，我们怎么计算x.y呢？
+      我们是按照偏移量来看的，所以我们需要知道x的地址，然后加上偏移量，就是y的地址了
+  *)
+
+  (*最新思路：
+          x.y.z
+          这里的x不管是什么，当作左值计算！！！！！
+            所以下面的左值计算需要处理
+          然后，然后根据类型，计算偏移量，然后加上x的地址，就是y的地址了
+
+  *)
+  | EUnionMember x field ty=>
       match ty with
       | TStruct _ => False_sem
       | TUnion _ => False_sem
       | _ => 
-        match e1 with
-        | EStructMember x' field' ty' | EUnionMember x' field' ty' | EPoniter_Struct_Member x' field' ty' | EPoniter_Union_Member x' field' ty' =>
-          match ty' with
-          | TStruct _ => False_sem
-          | TUnion _ => False_sem
-          | _ => eval_l e1
-          end
-        | _ => eval_l e1
+        match expr_type_extract x with
+        | TUnion union_type => union_member_sem_r (eval_l x) union_type field ty
+        | _ => False_sem
         end
-      end
-  | EStructMember x field ty => (*这里试图解决struct的嵌套问题但是失败了，最后一步缺少能够由expr得到string的方法x.y*)
-      match x with
-      | EStructMember x' field' ty => EStructMember x' field' ty
-      | EUnionMember x' field' ty => EUnionMember x' field' ty
-      | EPoniter_Struct_Member x' field' ty => EPoniter_Struct_Member x' field' ty
-      | EPoniter_Union_Member x' field' ty => EPoniter_Union_Member x' field' ty
-      | _ => struct_menber_sem x field
-      end
-  | EUnionMember x field ty=>
-      union_menber_sem x field
+      end  
+
   |EPoniter_Struct_Member x field ty=>
-      struct_menber_sem x field
+    match ty with
+    | TStruct _ => False_sem
+    | TUnion _ => False_sem
+    | _ => 
+      match expr_type_extract x with
+      | TPointer pointed_type =>
+        match pointed_type with
+        | TStruct struct_type => struct_member_sem_r (eval_r x) struct_type field ty
+        | _ => False_sem
+        end
+      | _ => False_sem
+      end
+    end
+  
   | EPoniter_Union_Member x field ty=>
-      union_menber_sem x field
+    match ty with
+    | TStruct _ => False_sem
+    | TUnion _ => False_sem
+    | _ => 
+      match expr_type_extract x with
+      | TPointer pointed_type =>
+        match pointed_type with
+        | TUnion union_type => union_member_sem_r (eval_r x) union_type field ty
+        | _ => False_sem
+        end
+      | _ => False_sem
+      end
+    end
+   
   end
   with eval_l (e: expr): EDenote :=
+  (*好，让我们想想能对什么东西计算左值
+    1. EVar x ty （无条件）
+    2. EDeref x ty （无条件）
+    3. EStructMember x field ty
+        这个玩意儿。。。。。的话，需要x的左值+ field在x这个struct中的偏移量
+    4. EUnionMember x field ty
+    5. EPoniter_Struct_Member x field ty
+    6. EPoniter_Union_Member x field ty
+  
+  *)
   match e with
-  | EVar X =>
+  | EVar X ty=>
       var_sem_l X
-  | EDeref e1 =>
+  | EDeref e1 ty =>
       eval_r e1
+  | EStructMember x field ty =>
+      match expr_type_extract x with 
+      | TStruct struct_type => EStructMember_sem_l (eval_l x) struct_type field ty
+      | _ => False_sem
+      end
+  | EUnionMember x field ty=>
+      match expr_type_extract x with
+      | TUnion union_type => EUnionMember_sem_l (eval_l x) union_type field ty
+      | _ => False_sem
+      end
+      
+  | EPoniter_Struct_Member x field ty=>
+    (*对于 x->y 来说，这玩意儿的左值
+      就是说x是个指针，指向的是个struct
+      那么对应的地址应该是 x的右值 + field在x这个struct中的偏移量
+    *)
+      match expr_type_extract x with
+      | TPointer pointed_type =>
+        match pointed_type with
+        | TStruct struct_type => EStructMember_sem_l (eval_r x) struct_type field ty
+        | _ => False_sem
+        end
+      | _ => False_sem
+      end
+  | EPoniter_Union_Member x field ty=>
+      match expr_type_extract x with
+      | TPointer pointed_type =>
+        match pointed_type with
+        | TUnion union_type => EUnionMember_sem_l (eval_r x) union_type field ty
+        | _ => False_sem
+        end
+      | _ => False_sem
+      end
   | _ =>
       {| nrm := ∅; err := Sets.full; |}
   end.
 
-  
-1.union?怎么看
-2. mem 取值的时候考不考虑类型
-3.允不允许x.y.z 。。。。
+
+
+  Definition test_true (D: EDenote):
+  state -> state -> Prop :=
+  Rels.test
+    (fun s =>
+       exists i, D.(nrm) s i /\ Int64.signed i <> 0).
+
+Definition test_false (D: EDenote):
+  state -> state -> Prop :=
+  Rels.test (fun s => D.(nrm) s (Int64.repr 0)).
+
+Module CDenote.
+
+
+Record CDenote: Type := {
+  nrm: state -> state -> Prop;
+  err: state -> Prop;
+  inf: state -> Prop
+}.
+
+End CDenote.
+Import CDenote.
+
+Notation "x '.(nrm)'" := (CDenote.nrm x)
+  (at level 1, only printing).
+
+Notation "x '.(err)'" := (CDenote.err x)
+  (at level 1, only printing).
+
+Ltac any_nrm x ::=
+  match type of x with
+  | EDenote => exact (EDenote.nrm x)
+  | CDenote => exact (CDenote.nrm x)
+  end.
+
+Ltac any_err x ::=
+  match type of x with
+  | EDenote => exact (EDenote.err x)
+  | CDenote => exact (CDenote.err x)
+  end.
+
+Definition skip_sem: CDenote :=
+  {|
+    nrm := Rels.id;
+    err := ∅;
+    inf := ∅;
+  |}.
+
+Definition seq_sem (D1 D2: CDenote): CDenote :=
+  {|
+    nrm := D1.(nrm) ∘ D2.(nrm);
+    err := D1.(err) ∪ (D1.(nrm) ∘ D2.(err));
+    inf := D1.(inf) ∪ (D1.(nrm) ∘ D2.(inf));
+  |}.
+
+Definition if_sem
+             (D0: EDenote)
+             (D1 D2: CDenote): CDenote :=
+  {|
+    nrm := (test_true D0 ∘ D1.(nrm)) ∪
+           (test_false D0 ∘ D2.(nrm));
+    err := D0.(err) ∪
+           (test_true D0 ∘ D1.(err)) ∪
+           (test_false D0 ∘ D2.(err));
+    inf := (test_true D0 ∘ D1.(inf)) ∪
+           (test_false D0 ∘ D2.(inf))
+  |}.
+
+Fixpoint boundedLB_nrm
+           (D0: EDenote)
+           (D1: CDenote)
+           (n: nat):
+  state -> state -> Prop :=
+  match n with
+  | O => ∅
+  | S n0 =>
+      (test_true D0 ∘ D1.(nrm) ∘ boundedLB_nrm D0 D1 n0) ∪
+      (test_false D0)
+  end.
+
+Fixpoint boundedLB_err
+           (D0: EDenote)
+           (D1: CDenote)
+           (n: nat): state -> Prop :=
+  match n with
+  | O => ∅
+  | S n0 =>
+     (test_true D0 ∘
+        ((D1.(nrm) ∘ boundedLB_err D0 D1 n0) ∪
+         D1.(err))) ∪
+      D0.(err)
+  end.
+
+Definition is_inf
+             (D0: EDenote)
+             (D1: CDenote)
+             (X: state -> Prop): Prop :=
+  X ⊆ test_true D0 ∘ ((D1.(nrm) ∘ X) ∪ D1.(inf)).
+
+Definition while_sem
+             (D0: EDenote)
+             (D1: CDenote): CDenote :=
+  {|
+    nrm := ⋃ (boundedLB_nrm D0 D1);
+    err := ⋃ (boundedLB_err D0 D1);
+    inf := Sets.general_union (is_inf D0 D1);
+  |}.
+
+(** 向地址赋值的语义与原先定义基本相同，只是现在需要规定所有变量的地址不被改变，
+    而非所有变量的值不被改变。*)
+
+Definition asgn_deref_sem_nrm
+             (D1 D2: state -> int64 -> Prop)
+             (s1 s2: state): Prop :=
+  exists i1 i2,
+    D1 s1 i1 /\
+    D2 s1 i2 /\
+    s1.(mem) i1 <> None /\
+    s2.(mem) i1 = Some (Vint i2) /\
+    (forall X, s1.(env) X = s2.(env) X) /\
+    (forall p, i1 <> p -> s1.(mem) p = s2.(mem) p).
+
+Definition asgn_deref_sem_err
+             (D1: state -> int64 -> Prop)
+             (s1: state): Prop :=
+  exists i1,
+    D1 s1 i1 /\
+    s1.(mem) i1 = None.
+
+Definition asgn_deref_sem
+             (D1 D2: EDenote): CDenote :=
+  {|
+    nrm := asgn_deref_sem_nrm D1.(nrm) D2.(nrm);
+    err := D1.(err) ∪ D2.(err) ∪
+           asgn_deref_sem_err D2.(nrm);
+    inf := ∅;
+  |}.
+
+(** 变量赋值的行为可以基于此定义。*)
+
+Definition asgn_var_sem
+             (X: var_name)
+             (D1: EDenote): CDenote :=
+  asgn_deref_sem (var_sem_l X) D1.
+
+(** 在递归定义的程序语句语义中，只会直接使用表达式用作右值时的值。*)
+Inductive com: Type :=
+| CSkip : com
+| CAsgnVar (X: var_name) (e: expr)
+| CAsgnDeref (e1 e2: expr)
+| CSeq (c1 c2: com)
+| CIf (e: expr) (c1 c2: com)
+| CWhile (e: expr) (c: com)
+| CDeclear (X: var_name) (ty: type).
 
 
 
 
 
+
+Fixpoint eval_com (c: com): CDenote :=
+  match c with
+  | CSkip =>
+      skip_sem
+  | CAsgnVar X e =>
+      asgn_var_sem X (eval_r e)
+  | CAsgnDeref e1 e2 =>
+      asgn_deref_sem (eval_r e1) (eval_r e2)
+  | CSeq c1 c2 =>
+      seq_sem (eval_com c1) (eval_com c2)
+  | CIf e c1 c2 =>
+      if_sem (eval_r e) (eval_com c1) (eval_com c2)
+  | CWhile e c1 =>
+      while_sem (eval_r e) (eval_com c1)
+  end.

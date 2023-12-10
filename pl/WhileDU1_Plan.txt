@@ -116,6 +116,7 @@
 
 
                 1.1.4 完善表达式 （正在进行）
+                                    （！！废弃！！）
                     EStructMember (x:var_name) (field: var_name) : expr
                             基于x的类型，通过s.type_env找到x的类型，然后通过s.struct_union_info找到x的内部结构，然后找到field的类型
                             过程中采用size累加的方式找到field的偏移量，然后通过x的值找到x的内存地址，然后通过x的内存地址加上偏移量找到field的内存地址
@@ -156,7 +157,15 @@
                         err:
                             (fun s  => s.(type_env) X = TStruct X \/ s.(type_env) X = TUnion X) ∪ (deref_sem_r (var_sem_l X)).(err);
 
+                1.1.4：
+                    eval_r:
+                        
 
+                    eval_l:
+
+
+
+                    
 
 
 

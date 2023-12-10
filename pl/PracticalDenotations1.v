@@ -38,7 +38,7 @@ Definition state: Type := var_name -> int64.
     除了修改程序状态的定义，还需要相应修改程序证整数类型表达式的语义。在Coq中，
     _[eval_expr_int e]_的类型就需要改为_[state -> int64]_。*)
 
-Definition add_sem (D1 D2: state -> int64) (s: state): int64 :=
+Definition add_sem (D1 D2: state -> int64) s: int64 :=
   Int64.add (D1 s) (D2 s).
 
 Definition sub_sem (D1 D2: state -> int64) s: int64 :=
@@ -153,11 +153,6 @@ Definition mul_sem (D1 D2: state -> option int64) (s: state): option int64 :=
   end.
 
 (** 最终，整数类型表达式的语义可以归结为下面递归定义。*)
-
-Check state.
-Inductive all_state: Type :=
-| Original_state (s: state)
-| type_state (s: state).
 
 Fixpoint eval_expr_int (e: expr_int): state -> option int64 :=
   match e with
@@ -1704,10 +1699,6 @@ Definition asgn_deref_sem_nrm
     (forall X, s1.(vars) X = s2.(vars) X) /\
     (forall p, i1 <> p -> s1.(mem) p = s2.(mem) p).
 
-
-
-
-
 Definition asgn_deref_sem_err
              (D1: state -> int64 -> Prop)
              (s1: state): Prop :=
@@ -2189,11 +2180,7 @@ Definition while_sem
 
 (** 向地址赋值的语义与原先定义基本相同，只是现在需要规定所有变量的地址不被改变，
     而非所有变量的值不被改变。*)
-    Record CDenote: Type := {
-    nrm: state -> state -> Prop;
-    err: state -> Prop;
-    inf: state -> Prop
-  }.
+
 Definition asgn_deref_sem_nrm
              (D1 D2: state -> int64 -> Prop)
              (s1 s2: state): Prop :=
@@ -2221,34 +2208,6 @@ Definition asgn_deref_sem
     inf := ∅;
   |}.
 
-(*
-
-  state.
-
-  del 
-  (varname var_type)
-  (s1 s2:state)
-          size_env: type->int64
-          type_env:varname->type
-          env:var_name->int64
-          mem:int64->option val 
-
-  exists 未使用地址 forall X  s1.(env) X <> 未使用地址
-  forall name, name=var_name-> s2.(type_env) name = var_type + 其余不变
-
-  forall name, name=var_name-> s2.(env) name = ?未使用地址?  + 其余不变
-  forall addr, name=未使用地址-> s2.(mem) 未使用地址 = （Some Vuninit）  +其余不变
-
-
-  A的地址+计算所得偏移量
-
-struct A{
-  int x;
-  type?? B; (B->type - -》size  )
-  int y;
-  int z;
-}  A 没有value
-*)
 (** 变量赋值的行为可以基于此定义。*)
 
 Definition asgn_var_sem
