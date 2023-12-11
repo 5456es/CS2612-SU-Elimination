@@ -4,7 +4,7 @@ Require Import Coq.Strings.String.
 Require Import Coq.Classes.Morphisms.
 Require Import SetsClass.SetsClass. Import SetsNotation.
 Require Import compcert.lib.Integers.
-Require Import PL.SyntaxInCoq.
+Require Import PL.SyntaxInCoq. 
 Require Import PL.DenotationalSemantics.
 Local Open Scope bool.
 Local Open Scope string.

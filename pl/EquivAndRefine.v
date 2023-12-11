@@ -17,6 +17,10 @@ Local Open Scope string.
 Local Open Scope Z.
 Local Open Scope sets.
 
+
+
+
+
 (** * 定义与例子 *)
 
 Definition EVar': string -> expr := EVar.

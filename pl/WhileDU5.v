@@ -22,10 +22,6 @@ Module Lang_WhileDU3.
 Import Lang_WhileD.
 Import Lang_While.
 
-
-
-
-
 Inductive type : Type :=
 | TInt : type
 | TPointer (t: type) : type
@@ -47,8 +43,6 @@ Inductive expr : Type :=
 | EUnionMember (x:expr) (field: var_name)(ty:type) : expr  (* Access union member *)
 | EPoniter_Struct_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *)
 | EPoniter_Union_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *).
-
-
 
 Record state : Type := {
   type_env : var_name -> type;
@@ -72,7 +66,6 @@ Record state : Type := {
             | MVar ty name => Z.max acc (type_size ty)
         end) (union_info x) 0) ->True
 }.
-
 
 
 Notation "s '.(env)'" := (env s) (at level 1).
@@ -329,6 +322,14 @@ nrm := fun s i => s.(env) X = i;
 err := ∅;
 |}.
 
+
+Definition noSU_var_sem_l (X: var_name): EDenote :=
+{|
+nrm := fun s i => s.(env) X = i /\ (s.(type_env) X) <> TStruct X /\ (s.(type_env) X) <> TUnion X;
+err := ∅;
+|}.
+
+(** 基于此，可以又定义它作为右值时的值。*)
 (** 基于此，可以又定义它作为右值时的值。*)
 
 
@@ -496,8 +497,6 @@ Fixpoint calculate_type (s:state) (field:string)(fields:list men_var) : option t
     then Some ty
     else calculate_type s field rest
   end.
-
-
 
 (* 辅助函数：计算结构体中字段的偏移量 *)
 Fixpoint calculate_offset (s:state) (field: string) (fields: list men_var) (offset: Z) : option Z :=
@@ -696,7 +695,18 @@ Fixpoint eval_r (e: expr): EDenote :=
       (*eval_r e1 返回了什么？返回了的是一个Edenote ， 是 state->int64， 是返回了int64，那么你随便解析吧*)
 
   | EAddrOf e1 ty=>
-      eval_l e1
+    match ty with
+    | TPointer pointed_type =>
+      match expr_type_extract e1 with
+      | pointed_type => eval_l e1
+
+      end
+    | _ => False_sem
+      end
+
+
+      (*这里的e1必须是个左值，那么我们就需要一个eval_l*)
+      
       
       (*这里后面会判断，是个Var，那没关系，我们总是能通过state.env 找到这个变量的位置
         是个Dref？也没关系，反向回去好了。
@@ -863,6 +873,16 @@ Record CDenote: Type := {
 End CDenote.
 Import CDenote.
 
+Definition SU_state_staysame (s1 s2: state): Prop :=
+
+  s1.(struct_info) = s2.(struct_info) /\
+  s1.(union_info) = s2.(union_info) /\
+  s1.(type_size) = s2.(type_size).
+
+
+
+
+
 Notation "x '.(nrm)'" := (CDenote.nrm x)
   (at level 1, only printing).
 
@@ -972,7 +992,7 @@ Definition asgn_deref_sem_err
 Definition asgn_deref_sem
              (D1 D2: EDenote): CDenote :=
   {|
-    nrm := asgn_deref_sem_nrm D1.(nrm) D2.(nrm);
+    nrm := (asgn_deref_sem_nrm D1.(nrm) D2.(nrm));
     err := D1.(err) ∪ D2.(err) ∪
            asgn_deref_sem_err D2.(nrm);
     inf := ∅;
@@ -980,10 +1000,46 @@ Definition asgn_deref_sem
 
 (** 变量赋值的行为可以基于此定义。*)
 
+
+
+
 Definition asgn_var_sem
              (X: var_name)
              (D1: EDenote): CDenote :=
-  asgn_deref_sem (var_sem_l X) D1.
+  
+  asgn_deref_sem (noSU_var_sem_l X) D1.
+
+Check 12.
+(* 定义 int64 序列生成函数 *)
+Definition Zseq (start len : Z) : list Z :=
+  List.map Z.of_nat (List.seq (Z.to_nat start) (Z.to_nat len)).
+
+Definition declare_sem
+             (X: var_name)
+             (ty: type): CDenote :=
+  {|
+    nrm := fun s1 s2 =>
+             (*首先原来不能有这个变量名*)
+             forall i,
+               s1.(env) X <> i /\
+              (*使用一块空地址*)
+              exists i', 
+                (forall pos  ipos var, (In pos (Zseq (Int64.unsigned (s1.(env) var)) (s1.(type_size ) (s1.(type_env) var))))
+                                        /\ (In (Int64.unsigned ipos) (Zseq (Int64.unsigned i') (s1.(type_size ) (ty))))
+                                        /\ s1.(env) var = ipos 
+                                                -> ipos<> Int64.repr pos)
+              /\
+                s2.(env) X = i' /\
+                (s1.(mem) i' <> None) /\
+                (forall X', X <> X' -> s1.(env) X' = s2.(env) X') /\
+                (forall p, i' <> p -> s1.(mem) p = s2.(mem) p) /\
+                (s2.(type_env) X = ty) /\
+                SU_state_staysame s1 s2
+                ;
+    err:= fun s =>exists i, s.(env) X = i;
+    inf := ∅;
+  |}.
+
 
 (** 在递归定义的程序语句语义中，只会直接使用表达式用作右值时的值。*)
 Inductive com: Type :=
@@ -993,13 +1049,23 @@ Inductive com: Type :=
 | CSeq (c1 c2: com)
 | CIf (e: expr) (c1 c2: com)
 | CWhile (e: expr) (c: com)
-| CDeclear (X: var_name) (ty: type).
+| CDeclare(X: var_name) (ty: type)
+| CAsgnBasedOnExp (X: expr) (e: expr) .
 
 
+Definition False_sem_com: CDenote :=
+  {|
+    nrm := ∅;
+    err := Sets.full;
+    inf := ∅;
+  |}.
 
-
-
-
+(** 递归定义的程序语句语义。*)
+Definition Pointer_Check (e1 :expr) (ty:type): Prop :=
+  match expr_type_extract e1 with
+  | TPointer ty => True
+  | _ => False
+  end.
 Fixpoint eval_com (c: com): CDenote :=
   match c with
   | CSkip =>
@@ -1007,11 +1073,46 @@ Fixpoint eval_com (c: com): CDenote :=
   | CAsgnVar X e =>
       asgn_var_sem X (eval_r e)
   | CAsgnDeref e1 e2 =>
-      asgn_deref_sem (eval_r e1) (eval_r e2)
+      match Pointer_Check e1  (expr_type_extract e2) with
+      | True => asgn_deref_sem (eval_r e1) (eval_r e2)
+      end
   | CSeq c1 c2 =>
       seq_sem (eval_com c1) (eval_com c2)
   | CIf e c1 c2 =>
       if_sem (eval_r e) (eval_com c1) (eval_com c2)
   | CWhile e c1 =>
       while_sem (eval_r e) (eval_com c1)
+  | CDeclare X ty =>
+      declare_sem X ty
+  | CAsgnBasedOnExp X e =>
+      asgn_deref_sem (eval_l X) (eval_r e)
   end.
+
+
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
