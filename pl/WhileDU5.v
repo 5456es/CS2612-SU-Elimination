@@ -44,6 +44,8 @@ Inductive expr : Type :=
 | EPoniter_Struct_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *)
 | EPoniter_Union_Member (x:expr) (field: var_name)(ty:type) : expr  (* Access poniter member *).
 
+
+
 Record state : Type := {
   type_env : var_name -> type;
   env : var_name -> int64;
@@ -854,7 +856,7 @@ Fixpoint eval_r (e: expr): EDenote :=
   Definition test_true (D: EDenote):
   state -> state -> Prop :=
   Rels.test
-    (fun s =>
+    (fun s  =>
        exists i, D.(nrm) s i /\ Int64.signed i <> 0).
 
 Definition test_false (D: EDenote):
@@ -1087,6 +1089,13 @@ Fixpoint eval_com (c: com): CDenote :=
   | CAsgnBasedOnExp X e =>
       asgn_deref_sem (eval_l X) (eval_r e)
   end.
+
+
+End Lang_WhileDU3.
+
+Module Lang_WhileD_Malloc.
+
+
 
 
 
