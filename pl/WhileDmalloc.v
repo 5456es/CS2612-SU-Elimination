@@ -21,7 +21,7 @@ Import ListNotations.
 Import Lang_WhileD.
 Import Lang_While.
 
-
+Module WhileDmalloc.
 Inductive expr_malloc : Type :=
 | EConst (n: Z)  : expr_malloc
 | EVar (x: var_name) : expr_malloc
@@ -507,5 +507,32 @@ Definition declare_sem_malloc (X: var_name) (sz: Z): CDenote :=
     inf := ∅;
 |}.
 
-Definition Zseq (start len : Z) : list Z :=
-  List.map Z.of_nat (List.seq (Z.to_nat start) (Z.to_nat len)).
+Inductive com : Type :=
+  | CSkip: com
+  | CAsgnVar (x: var_name) (e: expr_malloc): com
+  | CAsgnDeref (e1 e2: expr_malloc): com
+  | CSeq (c1 c2: com): com
+  | CIf (e: expr_malloc) (c1 c2: com): com
+  | CWhile (e: expr_malloc) (c: com): com
+  | CDeclare (x: var_name) (sz: Z): com.
+
+
+Fixpoint eval_com (c: com): CDenote :=
+  match c with
+  | CSkip =>
+      skip_sem
+  | CAsgnVar X e =>
+      asgn_var_sem X (eval_r e)
+  | CAsgnDeref e1 e2 =>
+      asgn_deref_sem (eval_r e1) (eval_r e2)
+  | CSeq c1 c2 =>
+      seq_sem (eval_com c1) (eval_com c2)
+  | CIf e c1 c2 =>
+      if_sem (eval_r e) (eval_com c1) (eval_com c2)
+  | CWhile e c1 =>
+      while_sem (eval_r e) (eval_com c1)
+  | CDeclare X sz =>
+      declare_sem_malloc X sz
+  end.
+
+End WhileDmalloc.
